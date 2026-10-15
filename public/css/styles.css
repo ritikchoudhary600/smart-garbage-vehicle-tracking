@@ -1141,3 +1141,95 @@ body {
 .btn-action-sm:active {
   transform: scale(0.96);
 }
+
+/* ─────────────────────────────────────────────────────────────────────────
+   Toast Notification Container (Vercel + Localhost identical)
+───────────────────────────────────────────────────────────────────────── */
+#toast-container {
+  position: fixed;
+  bottom: 24px;
+  right: 24px;
+  z-index: 9999;
+  display: flex;
+  flex-direction: column-reverse;
+  gap: 8px;
+  pointer-events: none;
+}
+
+/* ─────────────────────────────────────────────────────────────────────────
+   Leaflet Custom Map Markers
+───────────────────────────────────────────────────────────────────────── */
+.custom-vehicle-div-icon,
+.custom-house-div-icon,
+.custom-pickup-div-icon {
+  background: transparent !important;
+  border: none !important;
+}
+
+.truck-marker-wrap {
+  width: 44px; height: 44px;
+  display: flex; align-items: center; justify-content: center;
+  transition: transform 0.4s ease;
+}
+.truck-marker-body {
+  position: relative;
+  display: flex; align-items: center; justify-content: center;
+  width: 36px; height: 36px;
+  background: #fff;
+  border-radius: 50%;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.25);
+  border: 2px solid #10b981;
+}
+.truck-heading-pointer {
+  position: absolute;
+  top: -8px; left: 50%;
+  transform: translateX(-50%);
+  width: 0; height: 0;
+  border-left: 5px solid transparent;
+  border-right: 5px solid transparent;
+  border-bottom: 8px solid #10b981;
+}
+
+.house-marker-body {
+  width: 34px; height: 34px;
+  display: flex; align-items: center; justify-content: center;
+  background: #fff;
+  border-radius: 50%;
+  border: 2px solid #3b82f6;
+  box-shadow: 0 2px 6px rgba(0,0,0,0.18);
+  font-size: 16px;
+  cursor: pointer;
+}
+.house-marker-body.alert { border-color: #ef4444; background: #fef2f2; }
+.house-marker-body.ready { border-color: #10b981; background: #ecfdf5; }
+
+.pickup-marker-body {
+  width: 34px; height: 34px;
+  display: flex; align-items: center; justify-content: center;
+  background: #fff;
+  border-radius: 8px;
+  border: 2px solid #f59e0b;
+  box-shadow: 0 2px 6px rgba(0,0,0,0.18);
+  font-size: 16px;
+  cursor: pointer;
+}
+
+/* ─────────────────────────────────────────────────────────────────────────
+   View panel show/hide (active state)
+───────────────────────────────────────────────────────────────────────── */
+.view-panel { display: none; }
+.view-panel.active { display: block; }
+
+/* ─────────────────────────────────────────────────────────────────────────
+   Geofence alert box hide by default
+───────────────────────────────────────────────────────────────────────── */
+#resident-geofence-alert { display: none; }
+
+/* ─────────────────────────────────────────────────────────────────────────
+   Notification items
+───────────────────────────────────────────────────────────────────────── */
+.notif-item {
+  padding: 8px 0;
+  border-bottom: 1px solid var(--border);
+}
+.notif-item:last-child { border-bottom: none; }
