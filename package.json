@@ -1,0 +1,23 @@
+{
+  "name": "smart-garbage-vehicle-tracking",
+  "version": "1.0.0",
+  "description": "Smart Garbage Vehicle Tracking & Automated Waste Collection Management System",
+  "main": "server/server.js",
+  "scripts": {
+    "start": "node server/server.js",
+    "dev": "node server/server.js",
+    "vercel-build": "",
+    "test": "node test/runTests.js"
+  },
+  "keywords": [
+    "smart-city",
+    "garbage-tracking",
+    "geofencing",
+    "noise-reduction",
+    "waste-management",
+    "leaflet",
+    "gps"
+  ],
+  "author": "Smart City Project",
+  "license": "MIT"
+}
