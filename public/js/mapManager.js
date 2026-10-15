@@ -1,284 +1,207 @@
 /**
- * mapManager.js - Leaflet OpenStreetMap Controller for Smart Garbage Vehicle System
- * Renders custom truck marker with rotating direction arrow, 500m geofence radius,
- * registered houses with status, and pickup request locations.
+ * mapManager.js — Leaflet map controller
+ * Exposes window.MapManager as a static helper object.
+ * Individual MapManager instances are created per map container.
+ * Works identically on localhost (Node.js) and Vercel (static).
  */
 
-class MapManager {
-  constructor(containerId, options = {}) {
-    this.containerId = containerId;
-    this.options = options;
-    this.map = null;
-    this.vehicleMarker = null;
-    this.geofenceCircle = null;
-    this.houseMarkers = new Map();
-    this.pickupMarkers = new Map();
-    this.routePolyline = null;
-    this.breadcrumbPolyline = null;
+class MapInstance {
+  constructor(containerId) {
+    this.containerId      = containerId;
+    this.map              = null;
+    this.vehicleMarker    = null;
+    this.geofenceCircle   = null;
+    this.houseMarkers     = new Map();
+    this.pickupMarkers    = new Map();
+    this.breadcrumb       = null;
+    this.routeLine        = null;
   }
 
-  init(center = [12.93950, 77.62780], zoom = 15) {
+  init(centerLat = 12.939, centerLon = 77.628, zoom = 15) {
     const container = document.getElementById(this.containerId);
     if (!container || this.map) return;
-
-    // Check if Leaflet is loaded
-    if (typeof L === 'undefined') {
-      console.error('Leaflet is not loaded yet');
-      return;
-    }
+    if (typeof L === 'undefined') { console.warn('Leaflet not loaded yet'); return; }
 
     this.map = L.map(this.containerId, {
-      center,
+      center: [centerLat, centerLon],
       zoom,
       zoomControl: true,
-      attributionControl: true
+      attributionControl: true,
     });
 
-    // Clean OpenStreetMap tile layer
     L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
       maxZoom: 19,
-      attribution: '&copy; OpenStreetMap contributors | EcoTrack Smart Waste'
+      attribution: '© OpenStreetMap contributors | SmartWaste EcoTrack',
     }).addTo(this.map);
 
-    // Invalidate map size after a moment to avoid rendering artifacts
-    setTimeout(() => {
-      this.map.invalidateSize();
-    }, 200);
+    setTimeout(() => this.map && this.map.invalidateSize(), 250);
   }
 
-  /**
-   * Draws or updates the 500m geofence circle around the vehicle or house
-   */
-  setGeofenceCircle(lat, lon, radius = 500, color = '#10b981') {
-    if (!this.map) return;
-
-    if (!this.geofenceCircle) {
-      this.geofenceCircle = L.circle([lat, lon], {
-        radius,
-        color,
-        fillColor: color,
-        fillOpacity: 0.12,
-        weight: 2,
-        dashArray: '6, 6'
-      }).addTo(this.map);
-    } else {
-      this.geofenceCircle.setLatLng([lat, lon]);
-      this.geofenceCircle.setStyle({ color, fillColor: color });
-    }
-  }
-
-  /**
-   * Updates vehicle marker with dynamic bearing angle & direction arrow
-   */
+  /* ── Vehicle marker ─────────────────────────────────────────────────── */
   updateVehicle(vehicle) {
     if (!this.map || !vehicle) return;
 
-    const lat = vehicle.lat;
-    const lon = vehicle.lon;
-    const bearing = vehicle.bearing || 0;
-    const octant = vehicle.bearingOctant ? vehicle.bearingOctant.label : 'North ↑';
+    const { lat, lon, bearing = 0, direction = {}, driverName = '', id = '', speed = 0, locality = '' } = vehicle;
+    const arrow = direction.label || 'North ↑';
 
-    const customHtml = `
-      <div class="truck-marker-wrap" style="transform: rotate(${bearing}deg);">
+    const html = `
+      <div class="truck-marker-wrap" style="transform:rotate(${bearing}deg);">
         <div class="truck-marker-body">
           <div class="truck-heading-pointer"></div>
-          <span style="transform: rotate(-${bearing}deg); font-size: 20px;">🚛</span>
+          <span style="transform:rotate(-${bearing}deg);font-size:20px;">🚛</span>
         </div>
-      </div>
-    `;
+      </div>`;
 
     const icon = L.divIcon({
-      html: customHtml,
+      html,
       className: 'custom-vehicle-div-icon',
       iconSize: [44, 44],
-      iconAnchor: [22, 22]
+      iconAnchor: [22, 22],
     });
+
+    const tipHtml = `<strong>${id}</strong><br>Driver: ${driverName}<br>Speed: ${Math.round(speed)} km/h<br>Heading: ${arrow}<br>Locality: ${locality}`;
 
     if (!this.vehicleMarker) {
       this.vehicleMarker = L.marker([lat, lon], { icon, zIndexOffset: 1000 }).addTo(this.map);
-      this.vehicleMarker.bindTooltip(`
-        <strong>${vehicle.id} (${vehicle.vehicleNumber})</strong><br>
-        Driver: ${vehicle.driverName}<br>
-        Speed: ${vehicle.speedKmh} km/h | Heading: ${octant} (${bearing}°)<br>
-        Locality: ${vehicle.currentLocality}
-      `, { offset: [0, -20] });
+      this.vehicleMarker.bindTooltip(tipHtml, { offset: [0, -20] });
     } else {
       this.vehicleMarker.setLatLng([lat, lon]);
       this.vehicleMarker.setIcon(icon);
-      this.vehicleMarker.setTooltipContent(`
-        <strong>${vehicle.id} (${vehicle.vehicleNumber})</strong><br>
-        Driver: ${vehicle.driverName}<br>
-        Speed: ${vehicle.speedKmh} km/h | Heading: ${octant} (${bearing}°)<br>
-        Locality: ${vehicle.currentLocality}
-      `);
+      this.vehicleMarker.setTooltipContent(tipHtml);
     }
 
-    // Update 500m geofence circle around vehicle
-    this.setGeofenceCircle(lat, lon, 500);
-
-    // Update breadcrumb history trail
-    if (vehicle.history && vehicle.history.length > 1) {
-      const latlngs = vehicle.history.map(h => [h.lat, h.lon]);
-      if (!this.breadcrumbPolyline) {
-        this.breadcrumbPolyline = L.polyline(latlngs, {
-          color: '#10b981',
-          weight: 3,
-          opacity: 0.7,
-          dashArray: '4, 6'
-        }).addTo(this.map);
-      } else {
-        this.breadcrumbPolyline.setLatLngs(latlngs);
-      }
-    }
-  }
-
-  /**
-   * Draws the planned municipal route polyline
-   */
-  drawPlannedRoute(waypoints) {
-    if (!this.map || !waypoints || waypoints.length === 0) return;
-
-    const latlngs = waypoints.map(w => [w.lat, w.lon]);
-    if (!this.routePolyline) {
-      this.routePolyline = L.polyline(latlngs, {
-        color: '#6366f1',
-        weight: 4,
-        opacity: 0.45
+    // 500m geofence circle follows vehicle
+    if (!this.geofenceCircle) {
+      this.geofenceCircle = L.circle([lat, lon], {
+        radius: 500, color: '#10b981', fillColor: '#10b981',
+        fillOpacity: 0.10, weight: 2, dashArray: '6 6',
       }).addTo(this.map);
     } else {
-      this.routePolyline.setLatLngs(latlngs);
+      this.geofenceCircle.setLatLng([lat, lon]);
     }
   }
 
-  /**
-   * Updates registered houses markers on the map
-   */
-  updateHouses(houses, featuredHouseNo = '125') {
+  /* ── Breadcrumb trail ───────────────────────────────────────────────── */
+  updateTrail(trail) {
+    if (!this.map || !trail || trail.length < 2) return;
+    const latlngs = trail.map(p => [p.lat, p.lon]);
+    if (!this.breadcrumb) {
+      this.breadcrumb = L.polyline(latlngs, {
+        color: '#10b981', weight: 3, opacity: 0.65, dashArray: '4 6',
+      }).addTo(this.map);
+    } else {
+      this.breadcrumb.setLatLngs(latlngs);
+    }
+  }
+
+  /* ── Route polyline ─────────────────────────────────────────────────── */
+  drawRoute(waypoints) {
+    if (!this.map || !waypoints || !waypoints.length) return;
+    const latlngs = waypoints.map(w => [w.lat, w.lon]);
+    if (!this.routeLine) {
+      this.routeLine = L.polyline(latlngs, {
+        color: '#6366f1', weight: 4, opacity: 0.45,
+      }).addTo(this.map);
+    } else {
+      this.routeLine.setLatLngs(latlngs);
+    }
+  }
+
+  /* ── House markers ──────────────────────────────────────────────────── */
+  updateHouses(houses) {
     if (!this.map || !houses) return;
 
     for (const house of houses) {
-      const isFeatured = house.houseNo === featuredHouseNo;
-      const isReady = house.garbageReady;
-      const isGeofence = house.isInGeofence;
+      const { id, houseNo, residentName, address, lat, lon,
+              garbageReady, isInGeofence, distanceToVehicle } = house;
 
-      let markerClass = 'house-marker-body';
-      if (isFeatured) markerClass += ' featured';
-      if (isReady) markerClass += ' ready';
-
-      const iconHtml = `
-        <div class="${markerClass}" title="House #${house.houseNo}">
-          ${isReady ? '✅' : '🏠'}
-        </div>
-      `;
+      const emoji = garbageReady ? '✅' : '🏠';
+      let cls = 'house-marker-body';
+      if (isInGeofence) cls += ' alert';
+      if (garbageReady)  cls += ' ready';
 
       const icon = L.divIcon({
-        html: iconHtml,
+        html: `<div class="${cls}" title="House #${houseNo}">${emoji}</div>`,
         className: 'custom-house-div-icon',
-        iconSize: [36, 36],
-        iconAnchor: [18, 18]
+        iconSize: [36, 36], iconAnchor: [18, 18],
       });
 
-      if (!this.houseMarkers.has(house.id)) {
-        const marker = L.marker([house.lat, house.lon], { icon, zIndexOffset: 500 }).addTo(this.map);
-        marker.bindTooltip(`
-          <strong>House #${house.houseNo} (${house.residentName})</strong><br>
-          ${house.address}<br>
-          Distance: ${Math.round(house.distanceMeters || 0)} m<br>
-          Status: ${isReady ? '🟢 Garbage Ready' : '⚪ Waiting'}<br>
-          ${isGeofence ? '🚨 Inside 500m Geofence!' : 'Outside 500m'}
-        `);
-        this.houseMarkers.set(house.id, marker);
+      const tip = `<strong>House #${houseNo} — ${residentName}</strong><br>${address}<br>` +
+        `Distance: ${distanceToVehicle ? Math.round(distanceToVehicle) + ' m' : '—'}<br>` +
+        `${garbageReady  ? '🟢 Garbage Ready' : '⚪ Waiting'}<br>` +
+        `${isInGeofence  ? '🚨 Inside 500m geofence!' : 'Outside 500m'}`;
+
+      if (!this.houseMarkers.has(id)) {
+        const m = L.marker([lat, lon], { icon, zIndexOffset: 500 }).addTo(this.map);
+        m.bindTooltip(tip);
+        this.houseMarkers.set(id, m);
       } else {
-        const marker = this.houseMarkers.get(house.id);
-        marker.setIcon(icon);
-        marker.setTooltipContent(`
-          <strong>House #${house.houseNo} (${house.residentName})</strong><br>
-          ${house.address}<br>
-          Distance: ${Math.round(house.distanceMeters || 0)} m<br>
-          Status: ${isReady ? '🟢 Garbage Ready' : '⚪ Waiting'}<br>
-          ${isGeofence ? '🚨 Inside 500m Geofence!' : 'Outside 500m'}
-        `);
+        const m = this.houseMarkers.get(id);
+        m.setIcon(icon);
+        m.setTooltipContent(tip);
       }
     }
   }
 
-  /**
-   * Updates pickup request markers on the map
-   */
+  /* ── Pickup request markers ─────────────────────────────────────────── */
   updatePickups(requests) {
     if (!this.map || !requests) return;
 
-    // Track active request IDs
     const activeIds = new Set(requests.map(r => r.id));
-
-    // Remove any markers no longer in requests
-    for (const [id, marker] of this.pickupMarkers.entries()) {
-      if (!activeIds.has(id)) {
-        this.map.removeLayer(marker);
-        this.pickupMarkers.delete(id);
-      }
+    for (const [id, m] of this.pickupMarkers.entries()) {
+      if (!activeIds.has(id)) { this.map.removeLayer(m); this.pickupMarkers.delete(id); }
     }
 
     for (const req of requests) {
-      const isCollected = req.status === 'Collected';
-      const iconHtml = `
-        <div class="pickup-marker-body ${isCollected ? 'collected' : ''}" title="Pickup: House #${req.houseNo}">
-          ${isCollected ? '✔' : '📦'}
-        </div>
-      `;
-
+      if (req.status === 'Collected') continue; // don't show collected on map
       const icon = L.divIcon({
-        html: iconHtml,
+        html: `<div class="pickup-marker-body" title="Pickup #${req.houseNo}">📦</div>`,
         className: 'custom-pickup-div-icon',
-        iconSize: [36, 36],
-        iconAnchor: [18, 18]
+        iconSize: [36, 36], iconAnchor: [18, 18],
       });
 
+      const tip = `<strong>Pickup ${req.id}</strong><br>House #${req.houseNo} — ${req.residentName}<br>` +
+        `Status: <strong>${req.status}</strong><br>${req.wasteType}` +
+        (req.note ? `<br>"${req.note}"` : '');
+
       if (!this.pickupMarkers.has(req.id)) {
-        const marker = L.marker([req.lat, req.lon], { icon, zIndexOffset: 700 }).addTo(this.map);
-        marker.bindTooltip(`
-          <strong>Pickup Request #${req.id}</strong><br>
-          House #${req.houseNo} (${req.residentName})<br>
-          Status: <strong>${req.status}</strong><br>
-          Note: "${req.note}"
-        `);
-        this.pickupMarkers.set(req.id, marker);
+        const m = L.marker([req.lat, req.lon], { icon, zIndexOffset: 700 }).addTo(this.map);
+        m.bindTooltip(tip);
+        this.pickupMarkers.set(req.id, m);
       } else {
-        const marker = this.pickupMarkers.get(req.id);
-        marker.setIcon(icon);
-        marker.setTooltipContent(`
-          <strong>Pickup Request #${req.id}</strong><br>
-          House #${req.houseNo} (${req.residentName})<br>
-          Status: <strong>${req.status}</strong><br>
-          Note: "${req.note}"
-        `);
+        const m = this.pickupMarkers.get(req.id);
+        m.setIcon(icon);
+        m.setTooltipContent(tip);
       }
     }
   }
 
-  /**
-   * Centers the map on vehicle and house
-   */
-  fitVehicleAndHouse(vehicleLat, vehicleLon, houseLat, houseLon) {
-    if (!this.map) return;
-    const bounds = L.latLngBounds([
-      [vehicleLat, vehicleLon],
-      [houseLat, houseLon]
-    ]);
-    this.map.fitBounds(bounds.pad(0.3));
-  }
-
-  /**
-   * Enables clicking on map to place or teleport the simulated vehicle
-   */
-  enableMapClickTeleport(onLocationClicked) {
-    if (!this.map) return;
-    this.map.on('click', (e) => {
-      if (typeof onLocationClicked === 'function') {
-        onLocationClicked(e.latlng.lat, e.latlng.lng);
-      }
-    });
+  invalidateSize() {
+    if (this.map) this.map.invalidateSize();
   }
 }
 
-window.MapManager = MapManager;
+/* ════════════════════════════════════════════════════════════════════════
+   window.MapManager — static helper that owns all MapInstance objects
+════════════════════════════════════════════════════════════════════════ */
+window.MapManager = {
+  _instances: {},
+  ready: true,
+
+  /* Create (or get existing) MapInstance for a container ID */
+  createMap(containerId, center = {}, zoom = 15) {
+    if (this._instances[containerId]) return this._instances[containerId];
+    const inst = new MapInstance(containerId);
+    inst.init(center.lat || 12.939, center.lon || 77.628, zoom);
+    this._instances[containerId] = inst;
+    return inst;
+  },
+
+  /* Helpers that operate on a single MapInstance */
+  updateVehicleMarker(inst, vehicle)     { inst && inst.updateVehicle(vehicle); },
+  updateHouseMarkers(inst, houses)       { inst && inst.updateHouses(houses); },
+  updatePickupMarkers(inst, requests)    { inst && inst.updatePickups(requests); },
+  updateGeofenceCircle(inst)             { /* handled inside updateVehicle */ },
+  updateTrail(inst, trail)              { inst && inst.updateTrail(trail); },
+  drawRoute(inst, waypoints)            { inst && inst.drawRoute(waypoints); },
+};
