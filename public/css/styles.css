@@ -948,8 +948,16 @@ body.is-gated > .topbar, body.is-gated > .app, body.is-gated > .dock { display: 
   border-radius: var(--r-sm); font-size: 13.5px; line-height: 1.45;
 }
 
-.gate-demo { display: none; max-width: 360px; margin-top: 22px; }
-.gate.is-demo .gate-demo { display: block; }
+.gate-demo { max-width: 360px; margin-top: 22px; }
+
+/* Shown in the top bar while exploring the demo */
+.demo-pill {
+  display: none; align-items: center; height: 26px; padding: 0 11px;
+  border-radius: var(--r-full); background: var(--amber-soft); color: #8A5A0F;
+  font-size: 11.5px; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase;
+}
+.demo-pill:hover { background: #F1E3C6; }
+body.is-demo .demo-pill { display: inline-flex; }
 .gate-or {
   display: flex; align-items: center; gap: 12px; margin-bottom: 14px;
   font-size: 11.5px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted);
@@ -1090,7 +1098,35 @@ body.no-sim .dock { display: none; }
 .location-block .field-row .field { margin-bottom: 10px; }
 .field-hint { font-size: 12.5px; color: var(--muted); margin-top: 8px; }
 .field-hint.is-error { color: var(--danger); }
-.btn-use-location svg { width: 16px; height: 16px; }
+.field-hint.is-warn { color: #8A5A0F; background: var(--amber-soft); padding: 8px 10px; border-radius: var(--r-sm); }
+
+/* Location pin picker (register / edit household) */
+.pick-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 10px; flex-wrap: wrap; }
+.pick-label { font-size: 12.5px; font-weight: 500; color: var(--ink-2); }
+.pick-head .btn svg { width: 16px; height: 16px; }
+.pick-map {
+  position: relative; height: 230px;
+  border: 1px solid var(--line-strong); border-radius: var(--r-md);
+  overflow: hidden; background: var(--sunken);
+}
+.pick-map .maplibregl-canvas { cursor: crosshair; }
+.pick-pin { width: 30px; height: 40px; display: grid; justify-items: center; cursor: grab; }
+.pick-pin:active { cursor: grabbing; }
+.pick-pin span {
+  position: relative; width: 26px; height: 26px; margin-top: 3px;
+  border-radius: 50% 50% 50% 0; transform: rotate(-45deg);
+  background: var(--accent); border: 3px solid #fff;
+  box-shadow: 0 6px 14px -4px rgba(17, 17, 16, 0.45);
+}
+.pick-pin span::after {
+  content: ""; position: absolute; inset: 0; margin: auto;
+  width: 7px; height: 7px; border-radius: 50%; background: #fff;
+}
+.pick-coords { margin-top: 10px; }
+.pick-coords summary { font-size: 12.5px; color: var(--muted); cursor: pointer; width: max-content; }
+.pick-coords summary:hover { color: var(--ink); }
+.pick-coords .field-row { margin-top: 10px; }
+.pick-coords .field { margin-bottom: 0; }
 
 /* ── Permissions sheet ────────────────────────────────────────────────── */
 .perm-list { display: grid; gap: 10px; }
