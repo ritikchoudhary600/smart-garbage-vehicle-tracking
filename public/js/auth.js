@@ -65,8 +65,19 @@
     window.app.init();
   }
 
+  // The demo lasts for this tab only (a reload stays in it; a new visit shows
+  // the sign-in page again), and never touches the real database
+  function demoRemembered() {
+    try { return sessionStorage.getItem(DEMO_KEY) === '1'; } catch (e) { return false; }
+  }
+  function forgetDemo() {
+    try { sessionStorage.removeItem(DEMO_KEY); localStorage.removeItem(DEMO_KEY); } catch (e) { /* storage unavailable */ }
+  }
+
   function launchDemo() {
-    try { localStorage.setItem(DEMO_KEY, '1'); } catch (e) { /* storage unavailable */ }
+    if (window.app) return;
+    try { sessionStorage.setItem(DEMO_KEY, '1'); } catch (e) { /* storage unavailable */ }
+    Auth.mode = 'demo';
     const store = window.AppDataStore;
     const profile = store.profiles.find(p => p.role === 'admin');
     return launch(profile, store);
@@ -117,8 +128,9 @@
   async function signOut() {
     if (window.DeviceAccess) window.DeviceAccess.stopLiveTracking();
     if (window.AppSimulatorEngine) window.AppSimulatorEngine.stop();
-    try { localStorage.removeItem(DEMO_KEY); } catch (e) { /* storage unavailable */ }
-    if (configured && Auth.client) await Auth.client.auth.signOut();
+    forgetDemo();
+    // Leaving the demo doesn't sign anyone out of a real account
+    if (Auth.mode !== 'demo' && configured && Auth.client) await Auth.client.auth.signOut();
     window.location.replace(window.location.pathname);
   }
 
@@ -131,11 +143,10 @@
 
     const gate = byId('auth-gate');
     gate.classList.toggle('is-demo', !configured);
+    try { localStorage.removeItem(DEMO_KEY); } catch (e) { /* older versions kept the demo flag here */ }
 
     if (!configured) {
-      let resume = false;
-      try { resume = localStorage.getItem(DEMO_KEY) === '1'; } catch (e) { /* storage unavailable */ }
-      return resume ? launchDemo() : showGate('signin');
+      return demoRemembered() ? launchDemo() : showGate('signin');
     }
 
     if (!window.supabase || !window.supabase.createClient) {
@@ -158,6 +169,7 @@
     // Sign-outs (including from another tab) return to the gate. Supabase
     // calls must not run inside this callback, hence the setTimeout.
     Auth.client.auth.onAuthStateChange((event, session) => {
+      if (Auth.mode === 'demo') return;   // a demo tab ignores sign-ins and sign-outs in other tabs
       if (event === 'SIGNED_OUT') {
         window.location.replace(window.location.pathname);
       } else if (event === 'SIGNED_IN' && session && !Auth.session) {
@@ -166,9 +178,13 @@
       }
     });
 
-    if (!data.session) return showGate('signin');
-    Auth.session = data.session;
-    return enter();
+    // A real account wins over a remembered demo
+    if (data.session) {
+      forgetDemo();
+      Auth.session = data.session;
+      return enter();
+    }
+    return demoRemembered() ? launchDemo() : showGate('signin');
   }
 
   window.addEventListener('DOMContentLoaded', () => {
