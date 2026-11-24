@@ -10,9 +10,19 @@ const url = require('node:url');
 
 const dataStore = require('./dataStore');
 const simulatorEngine = require('./simulatorEngine');
+const buildConfig = require('../scripts/build-config');
+
+// SUPABASE_URL / SUPABASE_ANON_KEY can live in a local .env file
+buildConfig.loadDotEnv();
 
 const PORT = process.env.PORT || 3000;
 const PUBLIC_DIR = path.join(__dirname, '..', 'public');
+
+// With Supabase configured, /js/config.js is generated from the environment;
+// otherwise the committed file (empty values = offline demo) is served.
+const supabaseEnv = buildConfig.readSupabaseEnv();
+buildConfig.validate(supabaseEnv);
+const CONFIG_JS = supabaseEnv.url && supabaseEnv.key ? buildConfig.renderConfig(supabaseEnv) : null;
 
 const MIME_TYPES = {
   '.html': 'text/html; charset=utf-8',
@@ -99,7 +109,8 @@ function serveStatic(req, res, pathname) {
         res.writeHead(500, { 'Content-Type': 'text/plain' });
         return res.end('500 Internal Server Error');
       }
-      res.writeHead(200, { 'Content-Type': contentType });
+      // Revalidate every time so edits (and new deploys) are never served stale
+      res.writeHead(200, { 'Content-Type': contentType, 'Cache-Control': 'no-cache' });
       res.end(content);
     });
   });
@@ -304,6 +315,12 @@ const server = http.createServer(async (req, res) => {
     return sendJson(res, 404, { error: 'API endpoint not found' });
   }
 
+  // Supabase settings from .env (see scripts/build-config.js)
+  if (pathname === '/js/config.js' && CONFIG_JS) {
+    res.writeHead(200, { 'Content-Type': 'application/javascript; charset=utf-8', 'Cache-Control': 'no-store' });
+    return res.end(CONFIG_JS);
+  }
+
   // Otherwise, serve static front-end assets
   serveStatic(req, res, pathname);
 });
@@ -317,6 +334,9 @@ server.listen(PORT, () => {
   console.log(`🚛 Driver App:        http://localhost:${PORT}#driver`);
   console.log(`🏛️ Admin Dashboard:   http://localhost:${PORT}#admin`);
   console.log(`🔀 Split Demo Mode:   http://localhost:${PORT}#split`);
+  console.log(CONFIG_JS
+    ? `🔐 Supabase:          ${supabaseEnv.url} (Google sign-in on)`
+    : `🧪 Supabase:          not configured, serving the offline demo (see .env.example)`);
   console.log(`================================================================`);
 });
 
