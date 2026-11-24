@@ -429,6 +429,9 @@
     ════════════════════════════════════════════════════════════════════ */
     _bindHouseholds() {
       this.householdModal = this.app._bindModal('household-modal', null, '.btn-close-household-modal');
+      this.householdPicker = window.LocationPicker.create({
+        mapId: 'hh-pick-map', latId: 'hh-lat', lonId: 'hh-lon', hintId: 'hh-location-hint', locateId: 'hh-locate',
+      });
       byId('ctl-add-household').addEventListener('click', () => this.openHousehold(null));
       byId('ctl-house-search').addEventListener('input', () => this.renderHouseholds());
       byId('ctl-households-tbody').addEventListener('click', (e) => {
@@ -503,6 +506,8 @@
       byId('hh-owner').innerHTML = '<option value="">No linked account</option>' + residents.map(p =>
         `<option value="${esc(p.id)}" ${h && h.ownerId === p.id ? 'selected' : ''}>${esc(p.fullName || p.email)} · ${esc(p.email)}</option>`).join('');
       this.householdModal.open();
+      // Editing keeps the saved pin; a new household starts on this device's location
+      setTimeout(() => this.householdPicker.open({ fallback: this.app._locationFallback(), autoLocate: !h }), 30);
     },
 
     async _saveHousehold(button) {
@@ -519,6 +524,10 @@
         ownerId: byId('hh-owner').value || null,
         alertRadiusM: byId('hh-alert-radius').value === '' ? null : Number(byId('hh-alert-radius').value),
       };
+      if (!this.householdPicker.hasPin()) {
+        this.app._showToast('Pin the household', 'Use your current location, or tap the map at the gate.', 'warning');
+        return;
+      }
       const st = this.state.settings;
       if (data.alertRadiusM != null && !(data.alertRadiusM >= st.alertRadiusMinM && data.alertRadiusM <= st.alertRadiusMaxM)) {
         this.app._showToast('Check the alert distance', `Use ${st.alertRadiusMinM}–${st.alertRadiusMaxM} m, or leave it empty for the ward default.`, 'warning');
