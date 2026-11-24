@@ -143,7 +143,7 @@ The app asks once after sign-in (and again from the account menu › **Device pe
 |---|---|---|
 | **Notifications** | Everyone | The 500 m alert, pickup updates and delay notices, as system notifications while the tab is in the background. A tiny service worker (`public/sw.js`) shows them, as Android Chrome requires. |
 | **Location** | Drivers | **Share live location**: the truck follows the driver's phone GPS instead of the simulator. Fixes go out every 4 s or 15 m; fixes less accurate than 150 m are skipped. Only while sharing is on. |
-| | Residents and admins (optional) | **Use my current location** pins a household when registering or editing it. Used once, never tracked. |
+| | Residents and admins (optional) | Registering a household opens a small map on your **current location** with a pin you can drag (or tap the map) onto your gate. Used once, never tracked. |
 | **Sound** | Everyone | Browsers keep audio off until a tap; this switches on the soft arrival chime. |
 | **Keep screen on** | Drivers | A screen wake lock while sharing GPS, because phones stop browser GPS updates when the screen locks. |
 
@@ -187,9 +187,12 @@ Camera and microphone are not used. A blocked permission shows how to allow it a
 ## 5. Maps and the route
 
 - **Open-source maps, no API key.** Vector tiles from [OpenFreeMap](https://openfreemap.org) (OpenStreetMap data, OpenMapTiles schema) rendered with [MapLibre GL JS](https://maplibre.org). Each map has a **Minimal** (Positron) and **Detailed** (Liberty) style switch.
-- **Real roads.** The Ward 4 route in Koramangala, Bengaluru follows actual streets. It was generated once from the public [OSRM](https://project-osrm.org) routing service and saved in `public/js/routeData.js`, so the app works without contacting OSRM. Each waypoint carries the road geometry that leads to it.
+- **Real roads (demo simulator).** The simulator's Ward 4 route in Koramangala, Bengaluru follows actual streets. In a real deployment elsewhere, trucks move from drivers' **live GPS** instead. It was generated once from the public [OSRM](https://project-osrm.org) routing service and saved in `public/js/routeData.js`, so the app works without contacting OSRM. Each waypoint carries the road geometry that leads to it.
 - **Smooth motion.** The truck glides along the road geometry between waypoints at constant speed while playing, with sub-pixel positioning and a heading arrow that eases toward the road 15 m ahead. A green trail marks the distance covered, and the dashed 500 m ring moves with the truck.
 - Each map is created the first time its view opens. The Municipal fleet map only zooms with the scroll wheel after it is clicked, so scrolling the page isn't hijacked.
+- **Maps open where you are, not on the demo.** A resident's map frames their own household (plus the truck when it's within 5 km), the Driver map frames the truck and its nearby pickups, and the Municipal map frames every household and the trucks working near them. The Bengaluru demo route is shown only when there is nothing else to show. Every map has a **locate me** button (blue dot with its accuracy circle).
+- **Pinning a household.** The register and edit dialogs open a street map on the device's current location, with a pin to drag or a tap to move. Phones use GPS (a few metres). A laptop's browser often only knows roughly where it is from Wi-Fi or the internet connection, sometimes a different city. When the fix is rougher than 250 m the dialog says so and asks you to drag the pin onto the gate. Coordinates can still be typed in.
+- Area names (e.g. "Ward 4 – Palm Avenue") exist only for the demo ward; elsewhere the app shows coordinates rather than a wrong name.
 
 ---
 
@@ -375,6 +378,7 @@ project/
 │       ├── dataStore.js       Offline demo engine: geofence, pickups, analytics, demo people
 │       ├── controlPanel.js    Control room: people, fleet, households, settings, audit log
 │       ├── deviceAccess.js    Location, notifications, sound, wake lock, live GPS
+│       ├── locationPicker.js  Map pin for a household's gate (current location, drag, tap)
 │       ├── app.js             UI controller: role-aware portals, forms, maps, simulator bar
 │       ├── geoUtils.js        Haversine, bearing, compass octants, locality, ETA
 │       ├── routeData.js       Road-snapped Ward 4 route (generated from OSRM)
