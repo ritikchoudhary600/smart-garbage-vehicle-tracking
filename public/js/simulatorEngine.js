@@ -82,6 +82,7 @@
     /* ── Reset to first waypoint ───────────────────────────────────────── */
     reset() {
       this.stop();
+      window.AppDataStore.resetGeofences();
       this._applyWaypoint(0, 0);
       window.dispatchEvent(new CustomEvent('simulation_reset', {
         detail: { currentIndex: 0, totalWaypoints: this.route.length },
