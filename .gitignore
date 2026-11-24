@@ -1,10 +1,35 @@
+# Dependencies
 node_modules/
+
+# Environment files (may hold secrets)
 .env
 .env.local
+.env.*.local
+
+# Logs
 *.log
 npm-debug.log*
-.DS_Store
-Thumbs.db
+yarn-debug.log*
+yarn-error.log*
+
+# Build output and caches
 dist/
 build/
 .cache/
+coverage/
+*.tmp
+
+# Vercel CLI project link (per machine)
+.vercel/
+
+# Release archives
+*.zip
+
+# Editors
+.idea/
+.vscode/
+
+# OS files
+.DS_Store
+Thumbs.db
+Desktop.ini
