@@ -95,8 +95,23 @@ class MapInstance {
     this.pickupMarkers = new Map();   // id → marker
     this._target = null;
     this._anim   = null;
-    this._fitted = false;
     this.zoneRadiusM = null;   // per-map override (a resident's own alert distance)
+
+    // What the map frames: the app passes the points that matter to this
+    // viewer (their household, the truck, the fleet). Refits only when the
+    // focus key changes, so it never fights someone panning around.
+    this.focus     = [];
+    this._focusKey = null;
+    this._needsFit = false;
+  }
+
+  setFocus(points, key) {
+    const pts = (points || []).filter(p => p && Number.isFinite(p[0]) && Number.isFinite(p[1]));
+    if (!pts.length || key === this._focusKey) return;
+    this.focus = pts;
+    this._focusKey = key;
+    this._needsFit = true;
+    this._fit();
   }
 
   // null = follow the ward default set through MapManager.setZoneRadius
@@ -127,6 +142,13 @@ class MapInstance {
     this.map.touchZoomRotate.disableRotation();
     this.map.addControl(new StyleSwitchControl(this), 'top-right');
     this.map.addControl(new maplibregl.NavigationControl({ showCompass: false }), 'bottom-right');
+    // "Show my location": a blue dot with its accuracy circle, from the device's GPS
+    this.map.addControl(new maplibregl.GeolocateControl({
+      positionOptions: { enableHighAccuracy: true, maximumAge: 0, timeout: 20000 },
+      fitBoundsOptions: { maxZoom: 16 },
+      showAccuracyCircle: true,
+      trackUserLocation: false,
+    }), 'bottom-right');
     this.map.addControl(new maplibregl.AttributionControl({ compact: true }), 'bottom-right');
 
     // Maps embedded in a scrolling page only take the wheel once clicked
@@ -179,13 +201,19 @@ class MapInstance {
     if (src) src.setData(data);
   }
 
+  // Frame the focus points (one point: centre on it at street level)
   _fit() {
     const el = this._container();
-    if (this._fitted || !this.map || this.route.length < 2 || !el || el.clientWidth === 0) return;
-    const lats = this.route.map(p => p[0]), lons = this.route.map(p => p[1]);
-    this.map.fitBounds([[Math.min(...lons), Math.min(...lats)], [Math.max(...lons), Math.max(...lats)]],
-      { padding: 56, duration: 0 });
-    this._fitted = true;
+    if (!this._needsFit || !this.map || !this.focus.length || !el || el.clientWidth === 0) return;
+    const pts = this.focus;
+    if (pts.length === 1) {
+      this.map.jumpTo({ center: toLngLat(pts[0]), zoom: 16 });
+    } else {
+      const lats = pts.map(p => p[0]), lons = pts.map(p => p[1]);
+      this.map.fitBounds([[Math.min(...lons), Math.min(...lats)], [Math.max(...lons), Math.max(...lats)]],
+        { padding: 64, maxZoom: 16, duration: 0 });
+    }
+    this._needsFit = false;
   }
 
   invalidateSize() {
@@ -205,10 +233,10 @@ class MapInstance {
   }
 
   /* ── Route ──────────────────────────────────────────────────────────── */
+  // The demo simulator's road route (drawn, but the map no longer zooms to it)
   drawRoute(latlngs) {
     this.route = latlngs || [];
     this._setSource('route', lineFeature(this.route));
-    this._fit();
   }
 
   _setTrail(latlngs) {
