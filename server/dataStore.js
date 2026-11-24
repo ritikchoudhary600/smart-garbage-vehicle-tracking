@@ -14,21 +14,21 @@ const {
 // Predefined route waypoints for Ward 4 simulation
 // Starts at South Gate Approach (~1.2km away from House 125), traverses towards House 125, triggers 500m alert, and completes the loop
 const WARD_4_SIMULATION_ROUTE = [
-  { lat: 12.93350, lon: 77.62250, locality: 'Ward 4 - South Gate Approach', desc: 'Starting point (1.3 km away)' },
-  { lat: 12.93500, lon: 77.62400, locality: 'Ward 4 - South Gate Approach', desc: 'Approaching South Sector (~1.1 km)' },
-  { lat: 12.93650, lon: 77.62530, locality: 'Ward 4 - Palm Avenue & Park View', desc: 'Entering Palm Avenue (~900 m)' },
-  { lat: 12.93780, lon: 77.62650, locality: 'Ward 4 - Palm Avenue & Park View', desc: 'Near House 88 (~720 m)' },
-  { lat: 12.93880, lon: 77.62720, locality: 'Ward 4 - Palm Avenue & Park View', desc: 'Palm Crossway (~580 m)' },
-  // Crosses the 500m geofence around House 125!
-  { lat: 12.93950, lon: 77.62780, locality: 'Ward 4 - Green Glen Residential Sector', desc: 'Geofence Entry! (~480 m from House 125)' },
-  { lat: 12.94050, lon: 77.62850, locality: 'Ward 4 - Green Glen Residential Sector', desc: 'Near House 102 (~320 m)' },
-  { lat: 12.94120, lon: 77.62910, locality: 'Ward 4 - Green Glen Residential Sector', desc: 'Approaching House 125 (~150 m)' },
-  { lat: 12.94180, lon: 77.62950, locality: 'Ward 4 - Green Glen Residential Sector', desc: 'Arrived at House 125 (0 m)' },
-  { lat: 12.94240, lon: 77.63030, locality: 'Ward 4 - Sunshine Crossway', desc: 'Heading towards House 144 (~180 m)' },
-  { lat: 12.94310, lon: 77.63120, locality: 'Ward 4 - Sunshine Crossway', desc: 'Arrived at House 144' },
-  { lat: 12.94220, lon: 77.63280, locality: 'Ward 4 - Sunshine Crossway', desc: 'East Sector Exit loop' },
-  { lat: 12.94050, lon: 77.63200, locality: 'Ward 4 - Green Glen Residential Sector', desc: 'Returning along East Sector' },
-  { lat: 12.93800, lon: 77.63000, locality: 'Ward 4 - Palm Avenue & Park View', desc: 'Completing Loop' }
+  // Snapped to real roads; kept in sync with public/js/routeData.js (waypoints 0-7 at the labelled distances from House 125)
+  { lat: 12.934602, lon: 77.620047, locality: 'Municipal Central Depot', desc: 'Starting point (1.3 km away)' },
+  { lat: 12.936276, lon: 77.621079, locality: 'Ward 4 - South Gate Approach', desc: 'Approaching South Sector (~1.1 km)' },
+  { lat: 12.935341, lon: 77.624494, locality: 'Ward 4 - South Gate Approach', desc: 'Entering Palm Avenue (~900 m)' },
+  { lat: 12.936422, lon: 77.625799, locality: 'Ward 4 - Palm Avenue & Park View', desc: 'Near House 88 (~720 m)' },
+  { lat: 12.937265, lon: 77.626854, locality: 'Ward 4 - Palm Avenue & Park View', desc: 'Palm Crossway (~580 m)' },
+  { lat: 12.937866, lon: 77.627675, locality: 'Ward 4 - Palm Avenue & Park View', desc: 'Geofence Entry! (~480 m from House 125)' },
+  { lat: 12.939126, lon: 77.630594, locality: 'Ward 4 - Green Glen Residential Sector', desc: 'Near House 102 (~320 m)' },
+  { lat: 12.940451, lon: 77.62947, locality: 'Ward 4 - Green Glen Residential Sector', desc: 'Approaching House 125 (~150 m)' },
+  { lat: 12.94185, lon: 77.62951, locality: 'Ward 4 - Green Glen Residential Sector', desc: 'Arrived at House 125 (0 m)' },
+  { lat: 12.938832, lon: 77.632538, locality: 'Ward 4 - Green Glen Residential Sector', desc: 'Heading towards House 144' },
+  { lat: 12.943044, lon: 77.631179, locality: 'Ward 4 - Sunshine Crossway', desc: 'Arrived at House 144' },
+  { lat: 12.942359, lon: 77.632719, locality: 'Ward 4 - Sunshine Crossway', desc: 'East Sector Exit loop' },
+  { lat: 12.940573, lon: 77.632218, locality: 'Ward 4 - Sunshine Crossway', desc: 'Returning along East Sector' },
+  { lat: 12.937884, lon: 77.630027, locality: 'Ward 4 - Green Glen Residential Sector', desc: 'Completing Loop' }
 ];
 
 class DataStore {
@@ -85,8 +85,8 @@ class DataStore {
         address: 'House No. 102, 2nd Cross, Green Glen Sector',
         landmark: 'Near Community Water Kiosk',
         contact: '+91 98223 45678',
-        lat: 12.94050,
-        lon: 77.62820,
+        lat: 12.93931,
+        lon: 77.63051,
         isInGeofence: false,
         distanceMeters: 0,
         bearingFromVehicle: null,
@@ -117,8 +117,8 @@ class DataStore {
         address: 'House No. 88, 1st Cross, Palm Avenue',
         landmark: 'Opposite Green Nursery',
         contact: '+91 98445 67890',
-        lat: 12.93880,
-        lon: 77.62680,
+        lat: 12.93627,
+        lon: 77.62593,
         isInGeofence: false,
         distanceMeters: 0,
         bearingFromVehicle: null,
@@ -152,8 +152,8 @@ class DataStore {
         residentName: 'Karthik Menon',
         ward: 'Ward 4',
         address: 'House No. 88, 1st Cross, Palm Avenue',
-        lat: 12.93880,
-        lon: 77.62680,
+        lat: 12.93627,
+        lon: 77.62593,
         landmark: 'Near front garage door',
         note: 'Away on business trip. Box of cardboard packaging kept outside.',
         wasteType: 'Dry Recyclables',
