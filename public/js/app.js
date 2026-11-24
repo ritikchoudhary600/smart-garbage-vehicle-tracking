@@ -13,18 +13,39 @@
   function setText(sel, val, root = document) {
     qsa(sel, root).forEach(el => { el.textContent = val; });
   }
-  function setHTML(sel, val, root = document) {
-    const el = qs(sel, root); if (el) el.innerHTML = val;
-  }
   function byId(id) { return document.getElementById(id); }
+  function val(id)  { const el = byId(id); return el ? el.value.trim() : ''; }
+
+  // Escapes user-entered text before it goes into innerHTML templates
+  function esc(s) {
+    return String(s == null ? '' : s).replace(/[&<>"']/g, c =>
+      ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+  }
 
   function relTime(iso) {
     if (!iso) return '';
     const diff = Math.floor((Date.now() - new Date(iso).getTime()) / 1000);
+    if (diff < 10)   return 'just now';
     if (diff < 60)   return `${diff}s ago`;
     if (diff < 3600) return `${Math.floor(diff / 60)}m ago`;
     return `${Math.floor(diff / 3600)}h ago`;
   }
+
+  // Returns [number, unit] so the hero metric can style them separately
+  function distParts(m) {
+    if (m == null) return ['—', ''];
+    return m >= 1000 ? [(m / 1000).toFixed(2), 'km'] : [String(Math.round(m)), 'm'];
+  }
+  function fmtDist(m) {
+    const [n, u] = distParts(m);
+    return u ? `${n} ${u}` : n;
+  }
+
+  function statusPill(status) {
+    return `<span class="status s-${esc(String(status).toLowerCase())}">${esc(status)}</span>`;
+  }
+
+  const ARRIVED_M = 30;
 
   /* ════════════════════════════════════════════════════════════════════════
      SmartWasteApp
@@ -34,8 +55,10 @@
       this.currentRole       = 'resident';
       this.selectedHouseNo   = '125';
       this.soundEnabled      = true;
+      this.speed             = 1;
       this.hasUserInteracted = false;
       this.maps              = {};            // containerId → MapInstance
+      this._lastMapIndex     = null;
       this.state             = window.AppDataStore.getState();
     }
 
@@ -52,22 +75,22 @@
       this._setupDriverControls();
       this._connectEvents();
 
-      // Populate resident switcher
       this._populateResidentSwitcher();
-
-      // Initial full render
       this._updateUI();
+      this._updateSimBar();
 
-      // Switch to hash role
       const hash = window.location.hash.replace('#', '');
       this._switchRole(['resident', 'driver', 'admin', 'split'].includes(hash) ? hash : 'resident');
 
-      // Maps need DOM to be painted
-      setTimeout(() => this._initMaps(), 400);
+      // Maps need the DOM painted first
+      setTimeout(() => this._initMaps(), 300);
+
+      // Keep relative timestamps fresh
+      setInterval(() => this._updateUI(), 30000);
     }
 
     /* ────────────────────────────────────────────────────────────────────
-       AUDIO UNLOCK (Web Audio needs user gesture first)
+       AUDIO UNLOCK (Web Audio needs a user gesture first)
     ──────────────────────────────────────────────────────────────────── */
     _unlockAudio() {
       window.addEventListener('click', () => {
@@ -82,7 +105,6 @@
        NAVIGATION
     ──────────────────────────────────────────────────────────────────── */
     _setupNavigation() {
-      // Top nav buttons (class: role-tab nav-btn, data-role)
       qsa('.role-tab').forEach(btn => {
         btn.addEventListener('click', () => this._switchRole(btn.dataset.role));
       });
@@ -90,149 +112,188 @@
 
     _switchRole(role) {
       this.currentRole = role;
-
-      // Toggle active class on nav buttons
-      qsa('.role-tab').forEach(btn =>
-        btn.classList.toggle('active', btn.dataset.role === role));
-
-      // Show/hide view panels — panels have id="resident-view" etc.
-      qsa('.view-panel').forEach(panel => {
-        const panelRole = panel.id.replace('-view', '');
-        panel.classList.toggle('active', panelRole === role);
-      });
-
-      window.location.hash = role;
+      qsa('.role-tab').forEach(btn => btn.classList.toggle('active', btn.dataset.role === role));
+      qsa('.view').forEach(panel => panel.classList.toggle('active', panel.id === `${role}-view`));
+      history.replaceState(null, '', `#${role}`);
       this._updateUI();
 
-      // Invalidate Leaflet map size after transition
-      setTimeout(() => {
-        const mapId = {
-          resident: 'resident-map-container',
-          driver:   'driver-map-container',
-          admin:    'admin-map-container',
-          split:    'split-map-container',
-        }[role];
-        if (mapId && this.maps[mapId]) this.maps[mapId].invalidateSize();
-      }, 160);
+      // Leaflet needs a size refresh once a hidden map becomes visible
+      setTimeout(() => Object.values(this.maps).forEach(m => m.invalidateSize()), 60);
     }
 
     /* ────────────────────────────────────────────────────────────────────
        SIMULATION CONTROLS
     ──────────────────────────────────────────────────────────────────── */
     _setupSimControls() {
-      const btnPlay  = byId('btn-sim-play');
-      const btnFwd   = byId('btn-sim-step-fwd');
-      const btnBack  = byId('btn-sim-step-back');
-      const btnReset = byId('btn-sim-reset');
-      const speedSel = byId('sim-speed-select');
+      const sim = window.AppSimulatorEngine;
 
-      if (btnPlay) {
-        btnPlay.addEventListener('click', () => {
-          if (this.state.simulation.isRunning) {
-            window.AppSimulatorEngine.stop();
-          } else {
-            window.AppSimulatorEngine.start(Number(speedSel ? speedSel.value : 1));
-          }
-        });
-      }
-      if (speedSel) {
-        speedSel.addEventListener('change', () => {
-          if (this.state.simulation.isRunning)
-            window.AppSimulatorEngine.start(Number(speedSel.value));
-        });
-      }
-      if (btnFwd)   btnFwd.addEventListener('click',   () => window.AppSimulatorEngine.stepForward());
-      if (btnBack)  btnBack.addEventListener('click',  () => window.AppSimulatorEngine.stepBackward());
-      if (btnReset) btnReset.addEventListener('click', () => window.AppSimulatorEngine.reset());
+      byId('btn-sim-play').addEventListener('click', () => {
+        if (this.state.simulation.isRunning) {
+          sim.stop();
+        } else {
+          // Restart from the beginning if the previous run reached the end
+          const s = this.state.simulation;
+          if (s.currentIndex >= s.route.length - 1) sim.reset();
+          sim.start(this.speed);
+        }
+      });
 
-      // Quick-jump chips (data-index)
+      qsa('.speed-opt').forEach(btn => {
+        btn.addEventListener('click', () => {
+          this.speed = Number(btn.dataset.speed);
+          qsa('.speed-opt').forEach(b => b.classList.toggle('active', b === btn));
+          if (this.state.simulation.isRunning) sim.start(this.speed);
+        });
+      });
+
+      byId('btn-sim-step-fwd').addEventListener('click',  () => sim.stepForward());
+      byId('btn-sim-step-back').addEventListener('click', () => sim.stepBackward());
+      byId('btn-sim-reset').addEventListener('click',     () => sim.reset());
+
       qsa('.shortcut-chip').forEach(chip => {
-        chip.addEventListener('click', () =>
-          window.AppSimulatorEngine.teleport(Number(chip.dataset.index)));
+        chip.addEventListener('click', () => sim.teleport(Number(chip.dataset.index)));
+      });
+
+      this._setupDockToggle();
+    }
+
+    // Collapsible simulator dock; the choice is remembered per browser
+    _setupDockToggle() {
+      const KEY = 'sgt.dockCollapsed';
+      let saved = null;
+      try { saved = localStorage.getItem(KEY); } catch (e) { /* storage unavailable */ }
+      const startCollapsed = saved != null ? saved === '1' : window.innerWidth < 880;
+
+      const DURATION = 420;
+      const EASE = 'cubic-bezier(0.2, 0.8, 0.2, 1)';
+      const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+      const apply = (collapsed, animate) => {
+        const dock = qs('.dock');
+        const btn  = byId('btn-dock-toggle');
+        const from = dock.getBoundingClientRect();
+        const fromRadius = getComputedStyle(dock).borderRadius;
+
+        dock.classList.toggle('is-collapsed', collapsed);
+        document.body.classList.toggle('dock-collapsed', collapsed);
+        const label = collapsed ? 'Show simulator controls' : 'Hide simulator controls';
+        btn.setAttribute('aria-expanded', String(!collapsed));
+        btn.title = label;
+        btn.setAttribute('aria-label', label);
+
+        if (animate && !reduceMotion && dock.animate) {
+          // FLIP: CSS can't transition to width:auto, so tween between measured sizes
+          const to = dock.getBoundingClientRect();
+          const toRadius = getComputedStyle(dock).borderRadius;
+          dock.animate([
+            { width: `${from.width}px`, height: `${from.height}px`, borderRadius: fromRadius, overflow: 'hidden' },
+            { width: `${to.width}px`,   height: `${to.height}px`,   borderRadius: toRadius,   overflow: 'hidden' },
+          ], { duration: DURATION, easing: EASE });
+
+          if (!collapsed) {
+            const revealed = qsa('.dock-chips, .speed-seg, .dock-group .icon-btn', dock);
+            revealed.forEach(el => el.animate(
+              [{ opacity: 0, transform: 'translateY(6px)' }, { opacity: 1, transform: 'none' }],
+              { duration: DURATION - 80, delay: 120, easing: EASE, fill: 'backwards' }));
+          }
+        }
+
+        // Workspace height changes with --dock-h, so maps re-measure once it settles
+        setTimeout(() => Object.values(this.maps).forEach(m => m.invalidateSize()), animate ? DURATION + 40 : 50);
+      };
+
+      apply(startCollapsed, false);
+      byId('btn-dock-toggle').addEventListener('click', () => {
+        const collapsed = !qs('.dock').classList.contains('is-collapsed');
+        apply(collapsed, true);
+        try { localStorage.setItem(KEY, collapsed ? '1' : '0'); } catch (e) { /* storage unavailable */ }
       });
     }
 
     /* ────────────────────────────────────────────────────────────────────
        MODALS
     ──────────────────────────────────────────────────────────────────── */
+    _bindModal(modalId, openSel, closeSel, onOpen) {
+      const modal = byId(modalId);
+      if (!modal) return null;
+      const open  = () => { if (onOpen) onOpen(); modal.classList.add('open'); };
+      const close = () => modal.classList.remove('open');
+      qsa(openSel).forEach(b => b.addEventListener('click', open));
+      qsa(closeSel).forEach(b => b.addEventListener('click', close));
+      modal.addEventListener('click', (e) => { if (e.target === modal) close(); });
+      document.addEventListener('keydown', (e) => { if (e.key === 'Escape') close(); });
+      return close;
+    }
+
     _setupModals() {
-      // ── Pickup Request Modal ──────────────────────────────────────────
-      const pickupModal = byId('pickup-modal');
-      qsa('.btn-open-pickup-modal').forEach(b =>
-        b.addEventListener('click', () => pickupModal && pickupModal.classList.add('open')));
-      qsa('.btn-close-pickup-modal').forEach(b =>
-        b.addEventListener('click', () => pickupModal && pickupModal.classList.remove('open')));
-
+      // ── Pickup request ────────────────────────────────────────────────
       const pickupForm = byId('pickup-request-form');
-      if (pickupForm) {
-        pickupForm.addEventListener('submit', (e) => {
-          e.preventDefault();
-          window.AppDataStore.createPickupRequest({
-            houseNo:      (byId('req-house-no')      || {}).value || this.selectedHouseNo,
-            residentName: (byId('req-resident-name') || {}).value || 'Resident',
-            ward:         (byId('req-ward')          || {}).value || 'Ward 4',
-            landmark:     (byId('req-landmark')      || {}).value || '',
-            note:         (byId('req-note')          || {}).value || '',
-            wasteType:    (byId('req-waste-type')    || {}).value || 'Mixed Waste',
-          });
-          pickupModal && pickupModal.classList.remove('open');
-          pickupForm.reset();
+      const closePickup = this._bindModal('pickup-modal', '.btn-open-pickup-modal', '.btn-close-pickup-modal', () => {
+        // Prefill from the household currently selected
+        const house = this._selectedHouse();
+        pickupForm.reset();
+        if (house) {
+          byId('req-house-no').value      = house.houseNo;
+          byId('req-resident-name').value = house.residentName;
+          byId('req-ward').value          = house.ward;
+          byId('req-address').value       = house.address;
+          byId('req-landmark').value      = house.landmark || '';
+        }
+      });
+      pickupForm.addEventListener('submit', (e) => {
+        e.preventDefault();
+        window.AppDataStore.createPickupRequest({
+          houseNo:      val('req-house-no') || this.selectedHouseNo,
+          residentName: val('req-resident-name'),
+          ward:         val('req-ward'),
+          address:      val('req-address'),
+          landmark:     val('req-landmark'),
+          note:         val('req-note'),
+          wasteType:    val('req-waste-type'),
         });
-      }
+        closePickup();
+        pickupForm.reset();
+      });
 
-      // ── Emergency Modal ───────────────────────────────────────────────
-      const emergModal  = byId('emergency-modal');
-      const btnEmerg    = byId('btn-open-emergency-modal');
-      if (btnEmerg) btnEmerg.addEventListener('click', () => emergModal && emergModal.classList.add('open'));
-      qsa('.btn-close-emergency-modal').forEach(b =>
-        b.addEventListener('click', () => emergModal && emergModal.classList.remove('open')));
-
+      // ── Driver issue ──────────────────────────────────────────────────
       const emergForm = byId('emergency-form');
-      if (emergForm) {
-        emergForm.addEventListener('submit', (e) => {
-          e.preventDefault();
-          window.AppDataStore.reportEmergency({
-            vehicleId: 'GV-04',
-            type:    (byId('emerg-type') || {}).value || 'Other',
-            message: (byId('emerg-msg')  || {}).value || '',
+      const closeEmerg = this._bindModal('emergency-modal', '#btn-open-emergency-modal', '.btn-close-emergency-modal');
+      emergForm.addEventListener('submit', (e) => {
+        e.preventDefault();
+        window.AppDataStore.reportEmergency({
+          vehicleId: 'GV-04',
+          type:    val('emerg-type') || 'Other',
+          message: val('emerg-msg'),
+        });
+        closeEmerg();
+        emergForm.reset();
+      });
+
+      // ── Register household ────────────────────────────────────────────
+      const regForm = byId('register-house-form');
+      const closeReg = this._bindModal('register-modal', '#btn-open-register-modal', '.btn-close-register-modal');
+      regForm.addEventListener('submit', (e) => {
+        e.preventDefault();
+        try {
+          const house = window.AppDataStore.registerHouse({
+            houseNo:      val('reg-house-no'),
+            residentName: val('reg-resident-name'),
+            ward:         val('reg-ward'),
+            address:      val('reg-address'),
+            landmark:     val('reg-landmark'),
+            phone:        val('reg-contact'),
+            lat:          val('reg-lat'),
+            lon:          val('reg-lon'),
           });
-          emergModal && emergModal.classList.remove('open');
-          emergForm.reset();
-        });
-      }
-
-      // ── Register Household Modal ──────────────────────────────────────
-      const regModal = byId('register-modal');
-      const btnReg   = byId('btn-open-register-modal');
-      if (btnReg) btnReg.addEventListener('click', () => regModal && regModal.classList.add('open'));
-      qsa('.btn-close-register-modal').forEach(b =>
-        b.addEventListener('click', () => regModal && regModal.classList.remove('open')));
-
-      const regForm = byId('register-household-form');
-      if (regForm) {
-        regForm.addEventListener('submit', (e) => {
-          e.preventDefault();
-          // Add the new house to AppDataStore
-          const houseNo = (byId('new-house-no') || {}).value || '';
-          const name    = (byId('new-resident-name') || {}).value || 'Resident';
-          const ward    = (byId('new-ward') || {}).value || 'Ward 4';
-          const newHouse = {
-            id: `H${String(Date.now()).slice(-4)}`,
-            houseNo, residentName: name, ward,
-            address: `House ${houseNo}, ${ward}`,
-            lat: 12.9415 + (Math.random() - 0.5) * 0.005,
-            lon: 77.6290 + (Math.random() - 0.5) * 0.005,
-            garbageReady: false, isInGeofence: false,
-            distanceToVehicle: null, bearing: null, direction: null, eta: null,
-            notifiedAt: null, phone: '',
-          };
-          window.AppDataStore.houses.push(newHouse);
+          this.selectedHouseNo = house.houseNo;
           this._populateResidentSwitcher();
-          this._showToast('🏠 Household Registered', `House #${houseNo} added to Ward 4.`, 'success');
-          regModal && regModal.classList.remove('open');
+          this._updateUI();
+          closeReg();
           regForm.reset();
-        });
-      }
+        } catch (err) {
+          this._showToast('Registration failed', esc(err.message), 'error');
+        }
+      });
     }
 
     /* ────────────────────────────────────────────────────────────────────
@@ -240,45 +301,40 @@
     ──────────────────────────────────────────────────────────────────── */
     _setupSoundToggle() {
       const btn = byId('btn-sound-toggle');
-      if (!btn) return;
       btn.addEventListener('click', () => {
         this.soundEnabled = !this.soundEnabled;
-        btn.textContent   = this.soundEnabled ? '🔔 Audio Alert On' : '🔕 Audio Alert Off';
-        btn.title         = this.soundEnabled ? 'Click to mute digital chime' : 'Click to unmute digital chime';
+        btn.setAttribute('aria-pressed', String(this.soundEnabled));
+        btn.title = this.soundEnabled ? 'Mute arrival chime' : 'Unmute arrival chime';
       });
     }
 
     /* ────────────────────────────────────────────────────────────────────
        RESIDENT CONTROLS
     ──────────────────────────────────────────────────────────────────── */
-    _setupResidentControls() {
-      // Resident account switcher (dropdown)
-      const acctSel = byId('resident-account-select');
-      if (acctSel) {
-        acctSel.addEventListener('change', () => {
-          this.selectedHouseNo = acctSel.value;
-          this._updateResidentView();
-        });
-      }
+    _selectedHouse() {
+      return this.state.houses.find(h => h.houseNo === this.selectedHouseNo) || this.state.houses[0];
+    }
 
-      // Garbage-ready button (main resident view)
-      const grBtn = byId('btn-garbage-ready');
-      if (grBtn) {
-        grBtn.addEventListener('click', () => {
-          const house = this.state.houses.find(h => h.houseNo === this.selectedHouseNo);
-          if (!house) return;
-          window.AppDataStore.setGarbageReady(this.selectedHouseNo, !house.garbageReady);
+    _setupResidentControls() {
+      const acctSel = byId('resident-account-select');
+      acctSel.addEventListener('change', () => {
+        this.selectedHouseNo = acctSel.value;
+        this._updateUI();
+      });
+
+      // Garbage-ready buttons exist in both the resident and split views
+      qsa('.btn-garbage-ready').forEach(btn => {
+        btn.addEventListener('click', () => {
+          const house = this._selectedHouse();
+          if (house) window.AppDataStore.setGarbageReady(house.houseNo, !house.garbageReady);
         });
-      }
+      });
     }
 
     _populateResidentSwitcher() {
       const sel = byId('resident-account-select');
-      if (!sel) return;
       sel.innerHTML = this.state.houses.map(h =>
-        `<option value="${h.houseNo}" ${h.houseNo === this.selectedHouseNo ? 'selected' : ''}>
-          House #${h.houseNo} — ${h.residentName}
-        </option>`
+        `<option value="${esc(h.houseNo)}" ${h.houseNo === this.selectedHouseNo ? 'selected' : ''}>#${esc(h.houseNo)} · ${esc(h.residentName)}</option>`
       ).join('');
     }
 
@@ -287,88 +343,91 @@
     ──────────────────────────────────────────────────────────────────── */
     _setupDriverControls() {
       document.addEventListener('click', (e) => {
-        if (e.target.matches('[data-action="accept-pickup"]'))
-          window.AppDataStore.updatePickupStatus(e.target.dataset.id, 'Accepted');
-        else if (e.target.matches('[data-action="collect-pickup"]'))
-          window.AppDataStore.updatePickupStatus(e.target.dataset.id, 'Collected');
+        const btn = e.target.closest('[data-action]');
+        if (!btn) return;
+        const status = {
+          'accept-pickup':  'Accepted',
+          'collect-pickup': 'Collected',
+          'miss-pickup':    'Missed',
+        }[btn.dataset.action];
+        if (status) window.AppDataStore.updatePickupStatus(btn.dataset.id, status);
       });
+
+      const driverSel = byId('driver-profile-select');
+      driverSel.addEventListener('change', () => window.AppDataStore.switchDriver(driverSel.value));
     }
 
     /* ────────────────────────────────────────────────────────────────────
        CUSTOM-EVENT LISTENERS (replaces SSE EventSource)
+       State arrays are shared with AppDataStore, so handlers only add
+       feedback (toasts, chimes) and re-render.
     ──────────────────────────────────────────────────────────────────── */
     _connectEvents() {
-      window.addEventListener('telemetry_update', (e) => {
-        const { vehicle, houses, analytics } = e.detail;
-        if (vehicle) {
-          const idx = this.state.vehicles.findIndex(v => v.id === vehicle.id);
-          if (idx >= 0) this.state.vehicles[idx] = vehicle; else this.state.vehicles.push(vehicle);
-        }
-        if (houses)    this.state.houses    = houses;
-        if (analytics) this.state.analytics = analytics;
-        this._updateUI();
-      });
+      const rerender = () => this._updateUI();
+
+      window.addEventListener('telemetry_update', rerender);
 
       window.addEventListener('geofence_alert', (e) => {
         const notif = e.detail;
-        this.state.notifications.unshift(notif);
-        this._showToast('🚨 500m Geofence Alert!', notif.message, 'success');
-        if (this.soundEnabled && window.audioChime) window.audioChime.playChime('geofence');
-        this._updateUI();
+        // Only the household that entered the zone hears the chime
+        if (notif.houseNo === this.selectedHouseNo) {
+          this._showToast('Collection vehicle approaching', esc(notif.message), 'success');
+          if (this.soundEnabled && window.audioChime) window.audioChime.playChime('geofence');
+        }
+        rerender();
       });
 
       window.addEventListener('pickup_request_created', (e) => {
-        const { request, pickupRequests } = e.detail;
-        this.state.pickupRequests = pickupRequests;
-        this._showToast('📦 Pickup Requested', `House #${request.houseNo} — ${request.wasteType}`, 'info');
-        this._updateUI();
+        const { request } = e.detail;
+        this._showToast('Pickup requested', `House #${esc(request.houseNo)} · ${esc(request.wasteType)}`, 'info');
+        rerender();
       });
 
       window.addEventListener('pickup_status_updated', (e) => {
-        const { request, pickupRequests, analytics } = e.detail;
-        this.state.pickupRequests = pickupRequests;
-        if (analytics) this.state.analytics = analytics;
+        const { request } = e.detail;
         if (request.status === 'Collected') {
-          this._showToast('✅ Garbage Collected!', `House #${request.houseNo} marked as collected.`, 'success');
+          this._showToast('Garbage collected', `House #${esc(request.houseNo)} has been collected.`, 'success');
           if (this.soundEnabled && window.audioChime) window.audioChime.playChime('pickup_collected');
+        } else if (request.status === 'Missed') {
+          this._showToast('Pickup missed', `House #${esc(request.houseNo)} could not be collected.`, 'warning');
         } else {
-          this._showToast('🔄 Request Updated', `#${request.id} → ${request.status}`, 'info');
+          this._showToast('Request updated', `${esc(request.id)} is now ${esc(request.status.toLowerCase())}.`, 'info');
         }
-        this._updateUI();
+        rerender();
       });
 
       window.addEventListener('garbage_ready_updated', (e) => {
         const { houseNo, garbageReady } = e.detail;
-        const house = this.state.houses.find(h => h.houseNo === String(houseNo));
-        if (house) house.garbageReady = garbageReady;
-        this._showToast(garbageReady ? '✅ Garbage Marked Ready' : '↩️ Status Reset',
-          `House #${houseNo} garbage ready: ${garbageReady}`, 'info');
-        this._updateUI();
+        this._showToast(garbageReady ? 'Driver notified' : 'Ready status cleared',
+          garbageReady ? `Bins are outside House #${esc(houseNo)}.`
+                       : `House #${esc(houseNo)} is no longer marked ready.`, 'info');
+        rerender();
+      });
+
+      window.addEventListener('house_registered', (e) => {
+        const { house, isNew } = e.detail;
+        this._showToast(isNew ? 'Household registered' : 'Household updated',
+          `House #${esc(house.houseNo)} · ${esc(house.residentName)}`, 'success');
+        rerender();
+      });
+
+      window.addEventListener('driver_switched', (e) => {
+        const v = e.detail.vehicle;
+        this._showToast('Driver changed', `${esc(v.driverName)} is now driving ${esc(v.id)}.`, 'info');
+        rerender();
       });
 
       window.addEventListener('emergency_reported', (e) => {
         const { report } = e.detail;
-        this._showToast('⚠️ Emergency Reported', `${report.type}: ${report.message}`, 'warning');
+        this._showToast('Delay notice sent', `${esc(report.type)} · ${esc(report.message)}`, 'warning');
+        rerender();
       });
 
-      window.addEventListener('simulation_status', (e) => {
-        const { isRunning, currentIndex, speedMultiplier } = e.detail;
-        this.state.simulation.isRunning       = isRunning;
-        this.state.simulation.currentIndex    = currentIndex;
-        this.state.simulation.speedMultiplier = speedMultiplier;
+      window.addEventListener('simulation_status', () => this._updateSimBar());
+      window.addEventListener('simulation_step',   () => { this._updateSimBar(); rerender(); });
+      window.addEventListener('simulation_reset',  () => {
         this._updateSimBar();
-      });
-
-      window.addEventListener('simulation_step', (e) => {
-        this.state.simulation.currentIndex = e.detail.currentIndex;
-        this._updateSimBar();
-      });
-
-      window.addEventListener('simulation_reset', () => {
-        this.state.simulation.currentIndex = 0;
-        this.state.simulation.isRunning    = false;
-        this._updateSimBar();
-        this._showToast('⏮️ Simulation Reset', 'Vehicle returned to depot start.', 'info');
+        this._showToast('Simulation reset', 'The vehicle is back at the start of the route.', 'info');
       });
     }
 
@@ -376,77 +435,95 @@
        MASTER UI UPDATE
     ──────────────────────────────────────────────────────────────────── */
     _updateUI() {
+      setText('#badge-announcements-spared', this.state.analytics.announcementsAvoided);
       this._updateResidentView();
       this._updateDriverView();
       this._updateAdminView();
-      this._updateSplitView();
       this._updateMaps();
     }
 
-    /* ── Resident view ─────────────────────────────────────────────────── */
+    /* ── Resident view (also feeds the split view) ─────────────────────── */
     _updateResidentView() {
       const vehicle = this.state.vehicles[0];
-      const house   = this.state.houses.find(h => h.houseNo === this.selectedHouseNo)
-                   || this.state.houses[0];
+      const house   = this._selectedHouse();
       if (!vehicle || !house) return;
 
       const dist = house.distanceToVehicle;
-      const dir  = house.direction || {};
-      const eta  = house.eta || {};
+      const arrived = dist != null && dist < ARRIVED_M;
+      const [num, unit] = arrived ? ['0', 'm'] : distParts(dist);
 
-      // Update all elements with class val-res-distance (resident view + split view)
-      setText('.val-res-distance', dist ? `${Math.round(dist)} m` : '—');
-      setText('.val-res-direction', dir.label || '—');
-      setText('.val-res-eta', eta.formatted || '—');
+      setText('.val-res-name', house.residentName);
+      setText('.val-res-house', `#${house.houseNo}`);
+      setText('.val-res-address', house.address);
+      setText('.val-res-distance', fmtDist(dist));
+      setText('.val-res-distance-num', num);
+      setText('.val-res-distance-unit', unit);
+      setText('.val-res-direction', (vehicle.direction && vehicle.direction.label) || '—');
+      setText('.val-res-eta', arrived ? 'At your gate' : ((house.eta && house.eta.formatted) || '—'));
       setText('.val-res-locality', vehicle.locality || '—');
 
-      // Geofence alert box — show/hide
-      const alertBox = byId('resident-geofence-alert');
-      if (alertBox) {
-        alertBox.style.display = house.isInGeofence ? 'block' : 'none';
-        // Update distance inside alert
-        const distSpan = alertBox.querySelector('.val-res-distance');
-        if (distSpan && dist) distSpan.textContent = `${Math.round(dist)} m`;
-      }
+      qsa('.geofence-alert-box').forEach(box => box.classList.toggle('visible', !!house.isInGeofence));
 
-      // Garbage Ready button
-      const grBtn = byId('btn-garbage-ready');
-      if (grBtn) {
-        grBtn.querySelector('span:last-child').textContent =
-          house.garbageReady ? 'Garbage Ready ✅ (Tap to Undo)' : 'Mark Garbage Ready';
-        grBtn.classList.toggle('active', house.garbageReady);
-      }
+      qsa('.btn-garbage-ready').forEach(btn => {
+        btn.querySelector('.btn-label').textContent = house.garbageReady ? 'Garbage is ready' : 'Mark garbage ready';
+        btn.classList.toggle('ready', !!house.garbageReady);
+      });
 
-      // Distance progress bar
+      // Distance track fills as the vehicle closes in from 1.4 km
       const MAX_DIST = 1400;
-      const pct = dist ? Math.max(0, Math.min(100, ((MAX_DIST - dist) / MAX_DIST) * 100)) : 0;
+      const pct = dist != null ? Math.max(0, Math.min(100, ((MAX_DIST - dist) / MAX_DIST) * 100)) : 0;
       qsa('.distance-progress').forEach(bar => { bar.style.width = `${pct}%`; });
 
-      // Notification history list (class: resident-notifications-list)
-      const notifHtml = this.state.notifications.length
-        ? this.state.notifications.slice(0, 8).map(n => `
-            <div class="notif-item">
-              <div style="display:flex;align-items:center;gap:6px;">
-                <span>${n.type === 'geofence_alert' ? '🚨' : '📋'}</span>
-                <span style="font-size:0.82rem;color:var(--text-main);flex:1;">${n.message}</span>
+      // Activity — this household's events plus ward-wide broadcasts
+      const mine = this.state.notifications.filter(n => n.houseNo === house.houseNo || n.houseNo === 'ALL');
+      const notifHtml = mine.length
+        ? mine.slice(0, 12).map(n => `
+            <div class="n-item">
+              <span class="n-dot t-${esc(n.type)}"></span>
+              <div>
+                <div class="n-title">${esc(n.title || '')}</div>
+                <div class="n-msg">${esc(n.message)}</div>
+                <div class="n-time">${relTime(n.timestamp)}</div>
               </div>
-              <div style="font-size:0.72rem;color:var(--text-muted);margin-top:3px;">${relTime(n.timestamp)}</div>
             </div>`).join('')
-        : '<div style="color:var(--text-muted);font-size:0.82rem;padding:8px 0;">No notifications yet. Start the simulation! ▶</div>';
+        : '<div class="empty">Nothing yet. Press play to start the route.</div>';
       qsa('.resident-notifications-list').forEach(el => { el.innerHTML = notifHtml; });
 
-      // Pickup tracker (class: resident-pickup-tracker-wrapper)
-      const myPickups = this.state.pickupRequests.filter(r => r.houseNo === this.selectedHouseNo);
+      const myPickups = this.state.pickupRequests.filter(r => r.houseNo === house.houseNo);
       const pickupHtml = myPickups.length
-        ? myPickups.map(r => `
-            <div style="display:flex;justify-content:space-between;align-items:center;padding:6px 0;border-bottom:1px solid var(--border);font-size:0.82rem;">
-              <span>📦 ${r.id} — ${r.wasteType}</span>
-              <span class="badge status-${r.status.toLowerCase()}" style="font-size:0.72rem;padding:2px 8px;border-radius:4px;background:${r.status==='Collected'?'#ecfdf5':r.status==='Accepted'?'#eff6ff':'#fef9c3'};color:${r.status==='Collected'?'#065f46':r.status==='Accepted'?'#1e40af':'#713f12'};">
-                ${r.status}
-              </span>
-            </div>`).join('')
-        : '<div style="color:var(--text-muted);font-size:0.8rem;">No pickup requests for this house.</div>';
+        ? myPickups.slice(0, 3).map(r => this._renderStageTracker(r)).join('')
+        : '<div class="empty">No pickup requests. Away from home? Request one above.</div>';
       qsa('.resident-pickup-tracker-wrapper').forEach(el => { el.innerHTML = pickupHtml; });
+    }
+
+    _renderStageTracker(r) {
+      const missed = r.status === 'Missed';
+      const stages = [
+        { key: 'Pending',  at: r.createdAt },
+        { key: 'Accepted', at: r.acceptedAt },
+        missed ? { key: 'Missed', at: r.missedAt } : { key: 'Collected', at: r.collectedAt },
+      ];
+      const reached = stages.findIndex(s => s.key === r.status);
+
+      const steps = stages.map((s, i) => {
+        const state = i < reached ? 'done' : i === reached ? 'current' : 'todo';
+        const finished = state === 'done' || (state === 'current' && i === 2);
+        return `
+          <div class="stage-step ${state}${s.key === 'Missed' ? ' missed' : ''}">
+            <div class="stage-dot">${finished ? (s.key === 'Missed' ? '✕' : '✓') : i + 1}</div>
+            <div class="stage-label">${s.key}</div>
+            <div class="stage-time">${s.at && i <= reached ? relTime(s.at) : ''}</div>
+          </div>`;
+      }).join('<div class="stage-line"></div>');
+
+      return `
+        <div class="stage-card">
+          <div class="stage-card-head">
+            <div class="stage-card-title"><span class="mono">${esc(r.id)}</span>${esc(r.wasteType)}</div>
+            ${statusPill(r.status)}
+          </div>
+          <div class="stage-tracker">${steps}</div>
+        </div>`;
     }
 
     /* ── Driver view ───────────────────────────────────────────────────── */
@@ -454,227 +531,238 @@
       const vehicle = this.state.vehicles[0];
       if (!vehicle) return;
 
-      const { speed = 0, direction = {}, locality = '', status = 'active' } = vehicle;
-      const sim = this.state.simulation;
-      const total = (sim.route || []).length;
+      const { speed = 0, direction = {}, bearing = 0, locality = '' } = vehicle;
+      const sim   = this.state.simulation;
+      const total = sim.route.length;
       const cur   = sim.currentIndex || 0;
       const pct   = total > 1 ? Math.round((cur / (total - 1)) * 100) : 0;
 
-      // Driver header telemetry badges
-      setText('.val-drv-speed',   `${Math.round(speed)} km/h`);
-      setText('.val-drv-heading', direction.label || '—');
+      setText('#drv-display-name', vehicle.driverName);
+      const driverSel = byId('driver-profile-select');
+      if (driverSel.value !== vehicle.driverName) driverSel.value = vehicle.driverName;
+
+      setText('.val-drv-speed',    `${Math.round(speed)} km/h`);
+      setText('.val-drv-heading',  direction.name ? `${direction.name} ${Math.round(bearing)}°` : '—');
       setText('.val-drv-locality', locality || '—');
 
-      // Route progress bar
-      const routeBar = byId('drv-route-progress-bar');
-      if (routeBar) routeBar.style.width = `${pct}%`;
-      const routeStep = byId('drv-route-step');
-      if (routeStep) routeStep.textContent = `Waypoint ${cur + 1} of ${total}`;
-      const routePct = byId('drv-route-pct');
-      if (routePct) routePct.textContent = `${pct}% Completed`;
+      byId('drv-route-progress-bar').style.width = `${pct}%`;
+      setText('#drv-route-step', `Waypoint ${cur + 1} of ${total}`);
+      setText('#drv-route-pct',  `${pct}%`);
 
-      // Pending pickups queue (class: pickup-queue-container)
-      const pending = this.state.pickupRequests.filter(r => r.status !== 'Collected');
-      const pickupQueueHtml = pending.length
-        ? pending.map(r => `
-            <div style="border:1px solid var(--border);border-radius:var(--radius-md);padding:12px;margin-bottom:10px;background:${r.status==='Accepted'?'#f0fdf4':'#fff'};">
-              <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:6px;">
-                <strong style="font-size:0.88rem;color:var(--text-main);">📍 House #${r.houseNo} — ${r.wasteType}</strong>
-                <span style="font-size:0.72rem;font-weight:700;padding:2px 8px;border-radius:4px;background:${r.status==='Accepted'?'#d1fae5':'#fef3c7'};color:${r.status==='Accepted'?'#065f46':'#92400e'};">
-                  ${r.status}
-                </span>
+      // Open pickup queue, nearest first
+      const open = this.state.pickupRequests
+        .filter(r => r.status === 'Pending' || r.status === 'Accepted')
+        .sort((a, b) => (a.distanceToVehicle || 0) - (b.distanceToVehicle || 0));
+      const queueHtml = open.length
+        ? open.map(r => `
+            <div class="q-item${r.status === 'Accepted' ? ' is-accepted' : ''}">
+              <div class="q-head">
+                <div>
+                  <div class="q-title">House #${esc(r.houseNo)} · ${esc(r.residentName)}</div>
+                  <div class="q-dist">${fmtDist(r.distanceToVehicle)} away</div>
+                </div>
+                ${statusPill(r.status)}
               </div>
-              <p style="font-size:0.8rem;color:var(--text-muted);margin:2px 0;">${r.address}</p>
-              ${r.landmark ? `<p style="font-size:0.78rem;color:var(--text-muted);">📌 ${r.landmark}</p>` : ''}
-              ${r.note ? `<p style="font-size:0.78rem;color:var(--text-muted);">📝 "${r.note}"</p>` : ''}
-              <p style="font-size:0.75rem;color:var(--text-muted);">Resident: ${r.residentName} | ${relTime(r.createdAt)}</p>
-              <div style="display:flex;gap:8px;margin-top:8px;">
-                ${r.status === 'Pending'  ? `<button class="sim-btn primary" style="font-size:0.78rem;padding:4px 12px;" data-action="accept-pickup"  data-id="${r.id}">✅ Accept</button>` : ''}
-                ${r.status === 'Accepted' ? `<button class="sim-btn" style="font-size:0.78rem;padding:4px 12px;background:#10b981;color:white;" data-action="collect-pickup" data-id="${r.id}">🗑️ Mark Collected</button>` : ''}
+              <div class="q-meta">
+                <div>${esc(r.address)}</div>
+                ${r.landmark ? `<div><span class="q-k">Landmark</span> ${esc(r.landmark)}</div>` : ''}
+                <div><span class="q-k">Waste</span> ${esc(r.wasteType)}</div>
+              </div>
+              ${r.note ? `<div class="q-note">${esc(r.note)}</div>` : ''}
+              <div class="q-foot">Requested ${relTime(r.createdAt)}</div>
+              <div class="q-actions">
+                <button class="btn btn-accent btn-xs" data-action="collect-pickup" data-id="${esc(r.id)}">Mark as collected</button>
+                ${r.status === 'Pending' ? `<button class="btn btn-outline btn-xs" data-action="accept-pickup" data-id="${esc(r.id)}">Accept</button>` : ''}
+                <button class="btn btn-danger-quiet btn-xs" data-action="miss-pickup" data-id="${esc(r.id)}">Missed</button>
               </div>
             </div>`).join('')
-        : '<div style="text-align:center;color:var(--text-muted);padding:24px 0;font-size:0.88rem;">🎉 No pending pickup requests!</div>';
-      qsa('.pickup-queue-container').forEach(el => { el.innerHTML = pickupQueueHtml; });
-      qsa('.pickup-queue-list').forEach(el => { el.innerHTML = pickupQueueHtml; });
+        : '<div class="empty">No open pickup requests.</div>';
+      qsa('.pickup-queue-container').forEach(el => { el.innerHTML = queueHtml; });
+
+      // Households that pressed "Garbage ready", nearest first
+      const ready = this.state.houses
+        .filter(h => h.garbageReady)
+        .sort((a, b) => (a.distanceToVehicle || 0) - (b.distanceToVehicle || 0));
+      const readyHtml = ready.length
+        ? ready.map(h => `
+            <div class="ready-item">
+              <div>
+                <div class="ready-item-name">House #${esc(h.houseNo)} · ${esc(h.residentName)}</div>
+                <div class="ready-item-sub">${esc(h.landmark || h.address)}</div>
+              </div>
+              <span class="ready-item-dist">${fmtDist(h.distanceToVehicle)}</span>
+            </div>`).join('')
+        : '<div class="empty">No households have marked bins ready yet.</div>';
+      qsa('.driver-ready-bins').forEach(el => { el.innerHTML = readyHtml; });
     }
 
     /* ── Admin view ────────────────────────────────────────────────────── */
     _updateAdminView() {
       const vehicle = this.state.vehicles[0];
       if (!vehicle) return;
+      const a = this.state.analytics;
 
-      const { id, driverName, locality, speed = 0, direction = {}, status = 'active', lat, lon } = vehicle;
+      setText('#adm-announcements', a.announcementsAvoided);
+      setText('#adm-decibels',      a.decibelHoursSaved.toFixed(1));
+      setText('#adm-efficiency',    `${a.collectionEfficiencyPct.toFixed(1)}%`);
+      setText('#adm-schedule',      a.delayNotices
+        ? `${a.delayNotices} delay notice${a.delayNotices > 1 ? 's' : ''} today`
+        : 'Route running on schedule');
+      setText('#adm-pickups',       a.collectionsToday);
+      setText('#adm-missed',        a.missedPickups);
 
-      // KPI stat cards
-      const setText1 = (eid, v) => { const el = byId(eid); if (el) el.textContent = v; };
-      setText1('adm-announcements', this.state.analytics.noiseReductionEvents + 138);
-      setText1('adm-decibels',      `${((this.state.analytics.noiseReductionEvents + 138) * 0.5).toFixed(1)} dB·h`);
-      setText1('adm-pickups',       this.state.analytics.collectionsToday);
-      setText1('adm-missed',        this.state.analytics.missedPickups);
-
-      // Fleet table (#admin-vehicles-tbody)
-      const sim = this.state.simulation;
-      const total = (sim.route || []).length;
+      const sim   = this.state.simulation;
+      const total = sim.route.length;
       const pct   = total > 1 ? Math.round(((sim.currentIndex || 0) / (total - 1)) * 100) : 0;
-      const vtbody = byId('admin-vehicles-tbody');
-      if (vtbody) {
-        vtbody.innerHTML = `
-          <tr>
-            <td><strong>${id}</strong></td>
-            <td>${driverName}</td>
-            <td>${vehicle.plateNumber || 'KA-01-GC-4521'}</td>
-            <td>${locality || '—'}</td>
-            <td>${Math.round(speed)} km/h</td>
-            <td>${direction.label || '—'}</td>
-            <td>
-              <div style="display:flex;align-items:center;gap:6px;">
-                <div style="flex:1;height:6px;background:#e2e8f0;border-radius:3px;overflow:hidden;">
-                  <div style="width:${pct}%;height:100%;background:#10b981;"></div>
-                </div>
-                <span style="font-size:0.75rem;font-weight:700;color:#065f46;">${pct}%</span>
-              </div>
-            </td>
-            <td><span style="color:#10b981;font-weight:700;">● ${status}</span></td>
-          </tr>`;
-      }
+      const delayed = a.delayNotices > 0;
+      byId('admin-vehicles-tbody').innerHTML = `
+        <tr>
+          <td><strong>${esc(vehicle.id)}</strong></td>
+          <td>${esc(vehicle.driverName)}</td>
+          <td class="num">${esc(vehicle.plateNumber || '—')}</td>
+          <td>${esc(vehicle.locality || '—')}</td>
+          <td class="num">${Math.round(vehicle.speed || 0)} km/h</td>
+          <td>${esc((vehicle.direction && vehicle.direction.label) || '—')}</td>
+          <td><div class="mini-track"><div class="track"><div class="track-fill" style="width:${pct}%"></div></div><span class="mono">${pct}%</span></div></td>
+          <td><span class="state ${delayed ? 'state-warn' : 'state-ok'}">${delayed ? 'Delayed' : 'Active'}</span></td>
+        </tr>`;
 
-      // Houses table (#admin-houses-tbody)
-      const htbody = byId('admin-houses-tbody');
-      if (htbody) {
-        htbody.innerHTML = this.state.houses.map(h => `
-          <tr>
-            <td><strong>#${h.houseNo}</strong></td>
-            <td>${h.residentName}</td>
-            <td>${h.ward}</td>
-            <td>${h.distanceToVehicle ? Math.round(h.distanceToVehicle) + ' m' : '—'}</td>
-            <td>
-              <span style="display:inline-block;padding:2px 8px;border-radius:4px;font-size:0.75rem;font-weight:700;background:${h.isInGeofence?'#fef2f2':'#f0fdf4'};color:${h.isInGeofence?'#dc2626':'#166534'};">
-                ${h.isInGeofence ? '🚨 Inside!' : 'Outside'}
-              </span>
-            </td>
-            <td>${h.garbageReady ? '✅ Ready' : '<span style="color:var(--text-muted);">Waiting</span>'}</td>
-          </tr>`).join('');
-      }
+      byId('admin-houses-tbody').innerHTML = this.state.houses.map(h => `
+        <tr>
+          <td><strong>#${esc(h.houseNo)}</strong></td>
+          <td>${esc(h.residentName)}</td>
+          <td>${esc(h.ward)}</td>
+          <td class="num">${fmtDist(h.distanceToVehicle)}</td>
+          <td><span class="state ${h.isInGeofence ? 'state-in' : 'state-out'}">${h.isInGeofence ? 'Inside · alerted' : 'Outside'}</span></td>
+          <td>${h.garbageReady ? '<span class="state state-ok">Ready</span>' : '<span class="state state-out">Waiting</span>'}</td>
+        </tr>`).join('');
 
-      // Pickups table (#admin-pickups-tbody)
-      const ptbody = byId('admin-pickups-tbody');
-      if (ptbody) {
-        ptbody.innerHTML = this.state.pickupRequests.map(r => `
-          <tr>
-            <td><strong>${r.id}</strong></td>
-            <td>#${r.houseNo}</td>
-            <td>${r.residentName}</td>
-            <td>${r.ward}</td>
-            <td>${r.landmark || '—'}</td>
-            <td style="max-width:200px;font-size:0.8rem;">${r.note || '—'}</td>
-            <td>
-              <span style="padding:2px 8px;border-radius:4px;font-size:0.75rem;font-weight:700;background:${r.status==='Collected'?'#ecfdf5':r.status==='Accepted'?'#eff6ff':'#fef9c3'};color:${r.status==='Collected'?'#065f46':r.status==='Accepted'?'#1e40af':'#713f12'};">
-                ${r.status}
-              </span>
-            </td>
-          </tr>`).join('');
-      }
-    }
+      byId('admin-pickups-tbody').innerHTML = this.state.pickupRequests.map(r => `
+        <tr>
+          <td class="num">${esc(r.id)}</td>
+          <td><strong>#${esc(r.houseNo)}</strong></td>
+          <td>${esc(r.residentName)}</td>
+          <td>${esc(r.address)}<div class="sub">${esc(r.ward)}</div></td>
+          <td>${esc(r.landmark || '—')}</td>
+          <td class="cell-note">${esc(r.note || '—')}</td>
+          <td>${statusPill(r.status)}</td>
+        </tr>`).join('');
 
-    /* ── Split view ────────────────────────────────────────────────────── */
-    _updateSplitView() {
-      // Split view reuses the same CSS classes as main views — already updated by
-      // _updateResidentView() (setText('.val-res-distance', ...) hits both) and
-      // _updateDriverView() (setText('.val-drv-speed', ...) hits both).
-      // Nothing extra to do.
+      byId('admin-emergency-tbody').innerHTML = this.state.emergencyReports.length
+        ? this.state.emergencyReports.map(r => `
+          <tr>
+            <td class="num">${esc(r.id)}</td>
+            <td>${esc(r.vehicleId)}</td>
+            <td>${esc(r.driverName)}</td>
+            <td>${esc(r.type)}</td>
+            <td class="cell-note">${esc(r.message)}</td>
+            <td>${esc(r.locality)}</td>
+            <td class="num">${relTime(r.reportedAt)}</td>
+          </tr>`).join('')
+        : '<tr class="empty-row"><td colspan="7">No issues reported today.</td></tr>';
     }
 
     /* ────────────────────────────────────────────────────────────────────
-       SIMULATION BAR
+       SIMULATOR DOCK
     ──────────────────────────────────────────────────────────────────── */
     _updateSimBar() {
-      const sim    = this.state.simulation;
-      const route  = sim.route || [];
-      const total  = route.length;
-      const cur    = sim.currentIndex || 0;
-      const wp     = route[cur] || {};
+      const sim   = this.state.simulation;
+      const total = sim.route.length;
+      const cur   = sim.currentIndex || 0;
+      const wp    = sim.route[cur] || {};
 
       const btnPlay = byId('btn-sim-play');
-      if (btnPlay) btnPlay.textContent = sim.isRunning ? '⏸ Pause Simulation' : '▶️ Play Simulation';
+      btnPlay.classList.toggle('is-playing', sim.isRunning);
+      btnPlay.setAttribute('aria-label', sim.isRunning ? 'Pause simulation' : 'Play simulation');
 
-      const pct = total > 1 ? (cur / (total - 1)) * 100 : 0;
-      // Route progress indicators updated in driver view
-      const routeBar = byId('drv-route-progress-bar');
-      if (routeBar) routeBar.style.width = `${Math.round(pct)}%`;
+      setText('#sim-step-count', `${String(cur + 1).padStart(2, '0')}/${total}`);
+      setText('#sim-waypoint-label', wp.label || '');
+      qsa('.shortcut-chip').forEach(chip =>
+        chip.classList.toggle('active', Number(chip.dataset.index) === cur));
     }
 
     /* ────────────────────────────────────────────────────────────────────
        LEAFLET MAPS
     ──────────────────────────────────────────────────────────────────── */
-    _initMaps() {
-      const mapConfigs = [
-        { id: 'resident-map-container', lat: 12.938, lon: 77.627, zoom: 15 },
-        { id: 'driver-map-container',   lat: 12.938, lon: 77.627, zoom: 15 },
-        { id: 'admin-map-container',    lat: 12.938, lon: 77.627, zoom: 14 },
-        { id: 'split-map-container',    lat: 12.938, lon: 77.627, zoom: 15 },
-      ];
+    // Road geometry from the route start up to waypoint `upTo`
+    _roadLine(upTo) {
+      const route = this.state.simulation.route;
+      const line = [[route[0].lat, route[0].lon]];
+      for (let i = 1; i <= upTo && i < route.length; i++) {
+        const seg = route[i].path || [[route[i].lat, route[i].lon]];
+        line.push(...seg.slice(route[i].path ? 1 : 0));
+      }
+      return line;
+    }
 
-      for (const cfg of mapConfigs) {
-        if (!byId(cfg.id) || this.maps[cfg.id]) continue;
+    _initMaps() {
+      const ids = ['resident-map-container', 'driver-map-container', 'admin-map-container', 'split-map-container'];
+      const fullRoute = this._roadLine(this.state.simulation.route.length - 1);
+
+      for (const id of ids) {
+        if (!byId(id) || this.maps[id]) continue;
         try {
-          const inst = window.MapManager.createMap(cfg.id, { lat: cfg.lat, lon: cfg.lon }, cfg.zoom);
-          this.maps[cfg.id] = inst;
-          // Draw the planned route on all maps
-          inst.drawRoute(this.state.simulation.route || []);
+          const inst = window.MapManager.createMap(id, { lat: 12.938, lon: 77.627 }, 15);
+          inst.drawRoute(fullRoute);
+          this.maps[id] = inst;
         } catch (err) {
-          console.warn(`Map init failed for ${cfg.id}:`, err);
+          console.warn(`Map init failed for ${id}:`, err);
         }
       }
-
       this._updateMaps();
     }
 
     _updateMaps() {
-      if (!window.MapManager || !window.MapManager.ready) return;
       const vehicle = this.state.vehicles[0];
-      if (!vehicle) return;
+      if (!vehicle || !Object.keys(this.maps).length) return;
 
-      for (const [, inst] of Object.entries(this.maps)) {
-        window.MapManager.updateVehicleMarker(inst, vehicle);
-        window.MapManager.updateHouseMarkers(inst, this.state.houses);
-        window.MapManager.updatePickupMarkers(inst, this.state.pickupRequests);
-        window.MapManager.updateTrail(inst, vehicle.trail || []);
+      const sim  = this.state.simulation;
+      const cur  = sim.currentIndex || 0;
+      const last = this._lastMapIndex;
+      const opts = { trail: this._roadLine(cur) };
+
+      // Adjacent waypoint → glide along the road; anything else jumps
+      if (last != null && cur !== last) {
+        // While playing, glide for the whole tick at constant speed so segments
+        // chain into one continuous drive; manual steps ease in and out
+        const interval = Math.max(200, 2500 / (sim.speedMultiplier || 1));
+        const duration = sim.isRunning ? interval : 900;
+        const linear   = sim.isRunning;
+        if (cur === last + 1 && sim.route[cur].path) {
+          Object.assign(opts, { path: sim.route[cur].path, forward: true, duration, linear });
+        } else if (cur === last - 1 && sim.route[last].path) {
+          Object.assign(opts, { path: sim.route[last].path.slice().reverse(), forward: false, duration, linear });
+        }
+      }
+      this._lastMapIndex = cur;
+
+      for (const inst of Object.values(this.maps)) {
+        inst.updateVehicle(vehicle, opts);
+        inst.updateHouses(this.state.houses, this.selectedHouseNo);
+        inst.updatePickups(this.state.pickupRequests);
       }
     }
 
     /* ────────────────────────────────────────────────────────────────────
-       TOAST NOTIFICATIONS
+       TOASTS (title/message must already be escaped)
     ──────────────────────────────────────────────────────────────────── */
     _showToast(title, message, type = 'info') {
       const container = byId('toast-container');
-      if (!container) return;
-
       const toast = document.createElement('div');
       toast.className = `toast toast-${type}`;
-      toast.style.cssText = `
-        background: ${type === 'success' ? '#ecfdf5' : type === 'warning' ? '#fffbeb' : type === 'error' ? '#fef2f2' : '#eff6ff'};
-        border-left: 4px solid ${type === 'success' ? '#10b981' : type === 'warning' ? '#f59e0b' : type === 'error' ? '#ef4444' : '#3b82f6'};
-        border-radius: 8px; padding: 12px 16px; margin-bottom: 8px;
-        box-shadow: 0 4px 12px rgba(0,0,0,0.12); min-width: 280px; max-width: 360px;
-        opacity: 0; transform: translateX(20px); transition: all 0.3s ease;
-        pointer-events: none;
-      `;
       toast.innerHTML = `
-        <div style="font-weight:700;font-size:0.88rem;color:#1e293b;margin-bottom:3px;">${title}</div>
-        <div style="font-size:0.8rem;color:#475569;line-height:1.4;">${message}</div>
-      `;
+        <span class="toast-bar"></span>
+        <div>
+          <div class="toast-title">${title}</div>
+          <div class="toast-msg">${message}</div>
+        </div>`;
       container.appendChild(toast);
-
-      requestAnimationFrame(() => {
-        toast.style.opacity = '1';
-        toast.style.transform = 'translateX(0)';
-      });
+      while (container.children.length > 4) container.firstElementChild.remove();
 
       setTimeout(() => {
-        toast.style.opacity = '0';
-        toast.style.transform = 'translateX(20px)';
-        setTimeout(() => toast.remove(), 350);
-      }, 4500);
+        toast.classList.add('leaving');
+        setTimeout(() => toast.remove(), 300);
+      }, 4200);
     }
   }
 
