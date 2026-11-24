@@ -338,8 +338,10 @@ The code is ready for Vercel; nothing in this repository is linked to a Vercel a
 2. **Settings › Environment Variables**, for Production (and Preview if you use it):
    - `SUPABASE_URL` = `https://<project-ref>.supabase.co`
    - `SUPABASE_ANON_KEY` = the anon / publishable key
+
+   Until both are set, the site deploys as the **offline demo** (the build log says so). Environment variables only reach new builds, so **redeploy** after adding or changing them.
 3. Deploy. `vercel.json` already sets everything else:
-   - **Build command** `node scripts/build-config.js` writes `public/js/config.js` from those two variables. It **fails the build** if either is missing, or if you paste the service-role key by mistake.
+   - **Build command** `node scripts/build-config.js` writes `public/js/config.js` from those two variables. It **fails the build** on a real mistake: only one of the two set, a malformed URL, or the service-role / secret key pasted instead of the anon key.
    - **Output directory** `public/` (`server/`, `supabase/` and `test/` are not served).
    - **Security headers** on every response:
 
