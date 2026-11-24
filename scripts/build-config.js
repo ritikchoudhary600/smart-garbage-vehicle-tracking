@@ -8,9 +8,11 @@
  *   SUPABASE_ANON_KEY   the anon / publishable key (SUPABASE_PUBLISHABLE_KEY also works)
  *
  * The anon key is meant to be public: row-level security protects the data.
- * A service-role / secret key is refused, because it would bypass every rule.
- * Without the variables it writes the offline-demo config, except on Vercel,
- * where the build fails instead of publishing a site nobody can sign in to.
+ *
+ * With neither variable set, it writes the offline-demo config and says so,
+ * so a first deploy works before Supabase is connected. The build fails only
+ * on a real mistake: one variable without the other, a malformed URL, or a
+ * service-role / secret key (which would bypass every rule).
  */
 'use strict';
 
@@ -87,12 +89,17 @@ if (require.main === module) {
     console.error(`✖ ${err.message}`);
     process.exit(1);
   }
-  if (!cfg.url || !cfg.key) {
-    if (process.env.VERCEL) {
-      console.error('✖ Set SUPABASE_URL and SUPABASE_ANON_KEY in Vercel → Project → Settings → Environment Variables, then redeploy.');
-      process.exit(1);
-    }
-    console.warn('! SUPABASE_URL / SUPABASE_ANON_KEY not set: writing the offline-demo config.');
+  const where = process.env.VERCEL
+    ? 'Vercel → Project → Settings → Environment Variables, then redeploy'
+    : '.env (see .env.example)';
+  if (Boolean(cfg.url) !== Boolean(cfg.key)) {
+    console.error(`✖ Only ${cfg.url ? 'SUPABASE_URL' : 'SUPABASE_ANON_KEY'} is set. Set both SUPABASE_URL and SUPABASE_ANON_KEY in ${where}.`);
+    process.exit(1);
+  }
+  if (!cfg.url) {
+    console.warn('! SUPABASE_URL and SUPABASE_ANON_KEY are not set, so this build is the OFFLINE DEMO:');
+    console.warn('  no Google sign-in, and nothing is saved between visits.');
+    console.warn(`  To connect Supabase, set both in ${where}.`);
   }
   fs.writeFileSync(OUT, renderConfig(cfg));
   console.log(`✓ Wrote ${path.relative(ROOT, OUT)} (${cfg.url ? `Supabase: ${cfg.url}` : 'offline demo'})`);
