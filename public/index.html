@@ -3,776 +3,512 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Smart Garbage Vehicle Tracking & Waste Management System</title>
-  
-  <!-- Leaflet Map CSS -->
-  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" 
-        integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin=""/>
-  
-  <!-- System CSS -->
+  <title>Smart Garbage Vehicle Tracking · Quiet Waste Collection</title>
+  <meta name="theme-color" content="#F6F5F1">
+  <link rel="icon" href="/favicon.svg" type="image/svg+xml">
+
+  <!-- Typography: Geist (UI), Geist Mono (data), Instrument Serif (display) -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Geist:wght@300..700&family=Geist+Mono:wght@400..600&family=Instrument+Serif:ital@0;1&display=swap">
+
+  <!-- MapLibre GL (open-source vector maps) -->
+  <link rel="stylesheet" href="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.css"
+        integrity="sha384-MinO0mNliZ3vwppuPOUnGa+iq619pfMhLVUXfC4LHwSCvF9H+6P/KO4Q7qBOYV5V" crossorigin="anonymous">
+
   <link rel="stylesheet" href="/css/styles.css">
 </head>
 <body>
 
-  <!-- Top Header -->
-  <header class="top-header">
-    <div class="header-inner">
-      <div class="brand-section">
-        <div class="brand-icon">🚛</div>
-        <div class="brand-title">
-          <span>Smart Garbage Vehicle Tracking</span>
-          <span class="brand-subtitle">🌿 Quiet Smart-City Automated Waste System</span>
-        </div>
-      </div>
+  <!-- ══ Top bar ═════════════════════════════════════════════════════════ -->
+  <header class="topbar">
+    <div class="topbar-inner">
+      <a class="brand" href="#resident" aria-label="Smart Garbage Vehicle Tracking">
+        <!-- Mark: the vehicle (dot) inside its quiet 500 m zone (dashed ring) -->
+        <span class="brand-mark" aria-hidden="true">
+          <svg viewBox="0 0 32 32">
+            <circle class="bm-ring" cx="16" cy="16" r="9.5" pathLength="48" />
+            <circle class="bm-dot" cx="16" cy="16" r="3.4" />
+          </svg>
+        </span>
+        <span class="brand-text">
+          <span class="brand-name">Smart Garbage <em>Tracking</em></span>
+          <span class="brand-sub">Quiet waste collection · Ward 4</span>
+        </span>
+      </a>
 
-      <!-- Main Navigation Tabs -->
-      <nav class="mode-nav">
-        <button class="role-tab nav-btn active" data-role="resident">
-          <span>📱</span> Resident App
-        </button>
-        <button class="role-tab nav-btn" data-role="driver">
-          <span>🚛</span> Driver App
-        </button>
-        <button class="role-tab nav-btn" data-role="admin">
-          <span>🏛️</span> Municipal Admin
-        </button>
-        <button class="role-tab nav-btn" data-role="split">
-          <span>🔀</span> Split Demo Mode
-        </button>
+      <nav class="segmented" aria-label="Portal">
+        <button class="seg role-tab active" data-role="resident">Resident</button>
+        <button class="seg role-tab" data-role="driver">Driver</button>
+        <button class="seg role-tab" data-role="admin">Municipal</button>
+        <button class="seg role-tab" data-role="split">Split demo</button>
       </nav>
 
-      <!-- Header Actions & Noise Savings Badge -->
-      <div class="header-actions">
-        <div class="noise-badge" id="badge-announcements-spared">
-          🌿 138 Loudspeaker Blasts Spared
+      <div class="topbar-actions">
+        <div class="quiet-pill" title="Loudspeaker announcements replaced by quiet geofenced alerts">
+          <span class="live-dot" aria-hidden="true"></span>
+          <span class="mono" id="badge-announcements-spared">138</span>
+          <span class="quiet-pill-label">blasts spared</span>
         </div>
-        <button class="sound-toggle-btn" id="btn-sound-toggle" title="Toggle Digital Arrival Chime">
-          🔔 Audio Alert On
+        <button class="icon-btn" id="btn-sound-toggle" aria-pressed="true" title="Mute arrival chime">
+          <svg class="ico-on" viewBox="0 0 24 24"><path d="M6 16V11a6 6 0 1 1 12 0v5l1.5 2h-15z"/><path d="M10 20.5a2 2 0 0 0 4 0"/></svg>
+          <svg class="ico-off" viewBox="0 0 24 24"><path d="M6 16V11a6 6 0 0 1 9.3-5"/><path d="M18 11v5l1.5 2H8"/><path d="M10 20.5a2 2 0 0 0 4 0"/><path d="M4 4l16 16"/></svg>
         </button>
       </div>
     </div>
   </header>
 
-  <!-- Interactive GPS Simulation Dock (Accessible across all views) -->
-  <aside class="sim-bar">
-    <div class="sim-inner">
-      <div class="sim-title-group">
-        <span class="sim-badge">GPS Simulator</span>
-        <span style="font-size: 0.82rem; color: #94a3b8; font-weight: 500;">
-          Route: <strong>Ward 4 Morning Circuit (Approaching House 125)</strong>
-        </span>
-      </div>
+  <main class="app">
 
-      <div class="sim-controls">
-        <button class="sim-btn primary" id="btn-sim-play">
-          ▶️ Play Simulation
-        </button>
-        <button class="sim-btn" id="btn-sim-step-back" title="Step backward">
-          ◀ Step
-        </button>
-        <button class="sim-btn" id="btn-sim-step-fwd" title="Step forward">
-          Step ▶
-        </button>
-        <button class="sim-btn" id="btn-sim-reset" title="Reset route to start">
-          ⏮ Reset
-        </button>
-
-        <select class="speed-select" id="sim-speed-select">
-          <option value="1">1x Normal (2.5s)</option>
-          <option value="2">2x Speed (1.2s)</option>
-          <option value="4">4x Fast (600ms)</option>
-        </select>
-      </div>
-
-      <!-- Quick Jump Workflow Chips -->
-      <div class="scenario-shortcuts">
-        <span style="font-size: 0.72rem; color: #64748b; font-weight: 600; text-transform: uppercase;">Quick Jumps:</span>
-        <span class="shortcut-chip" data-index="0" title="Start of route (~1.3 km away)">1.3 km Start</span>
-        <span class="shortcut-chip" data-index="2" title="Entering Palm Avenue (~900 m away)">900 m</span>
-        <span class="shortcut-chip" data-index="3" title="Near House 88 (~720 m away)">720 m</span>
-        <span class="shortcut-chip" data-index="5" title="Crosses 500m Geofence! Triggers instant resident alert">🚨 480 m (500m Trigger)</span>
-        <span class="shortcut-chip" data-index="7" title="Approaching House 125 (~150 m)">150 m</span>
-        <span class="shortcut-chip" data-index="8" title="At House 125 Gate (0 m)">🏠 House 125</span>
-      </div>
-    </div>
-  </aside>
-
-  <!-- Main Content View Panels -->
-  <main class="main-content">
-
-    <!-- 1. RESIDENT VIEW PANEL -->
-    <section class="view-panel active" id="resident-view">
-      <div class="resident-layout">
-
-        <!-- Mobile Phone Mockup Frame -->
-        <div class="resident-mobile-frame">
-          <div class="mobile-notch">
-            <div class="mobile-notch-camera"></div>
-            <div class="mobile-notch-speaker"></div>
-          </div>
-
-          <div class="mobile-content">
-            <!-- Resident Profile Header -->
-            <div class="resident-info-bar">
-              <div style="flex: 1;">
-                <div style="display: flex; justify-content: space-between; align-items: center;">
-                  <div style="font-weight: 700; font-size: 0.95rem; color: var(--text-main);" id="res-profile-name">Priya Sharma</div>
-                  <div class="house-badge" id="res-profile-badge">House #125</div>
-                </div>
-                <div style="font-size: 0.75rem; color: var(--text-muted); margin-top: 2px;" id="res-profile-address">
-                  Ward 4 - 3rd Cross, Green Glen
-                </div>
-                
-                <!-- Resident Account Switcher & Add Household Controls -->
-                <div style="display: flex; gap: 6px; align-items: center; margin-top: 8px;">
-                  <select class="form-select resident-account-select" id="resident-account-select" style="padding: 3px 8px; font-size: 0.75rem; flex: 1;" title="Switch Resident Account">
-                    <!-- Populated dynamically -->
-                  </select>
-                  <button class="sim-btn secondary" id="btn-open-register-modal" style="padding: 4px 8px; font-size: 0.72rem; white-space: nowrap;" title="Register New Household">
-                    + Register
-                  </button>
-                </div>
-              </div>
-            </div>
-
-            <!-- 500m Geofence Arrival Alert Banner -->
-            <div class="geofence-alert-box" id="resident-geofence-alert">
-              <div class="alert-header">
-                <span>🚨</span>
-                <span>Garbage Vehicle Approaching!</span>
-              </div>
-              <div class="alert-text">
-                Garbage collection vehicle is approximately <strong><span class="val-res-distance">500 m</span></strong> away. 
-                Please keep your garbage ready outside.
-              </div>
-            </div>
-
-            <!-- Live Vehicle Telemetry Card -->
-            <div class="vehicle-status-card">
-              <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
-                <div style="font-weight: 700; font-size: 0.88rem; display: flex; align-items: center; gap: 6px;">
-                  <span style="color: #10b981;">🟢</span> Garbage Vehicle #GV-04
-                </div>
-                <span style="font-size: 0.75rem; background: #f1f5f9; padding: 2px 6px; border-radius: 4px; font-weight: 600;">
-                  Live GPS
-                </span>
-              </div>
-
-              <div class="telemetry-row">
-                <div class="metric-pill">
-                  <div class="label">Distance</div>
-                  <div class="value highlight val-res-distance">650 m</div>
-                </div>
-                <div class="metric-pill">
-                  <div class="label">Direction</div>
-                  <div class="value val-res-direction">Northeast ↗</div>
-                </div>
-                <div class="metric-pill">
-                  <div class="label">Est. Arrival</div>
-                  <div class="value val-res-eta">~3 min</div>
-                </div>
-              </div>
-
-              <!-- Locality Info -->
-              <div style="font-size: 0.78rem; color: var(--text-muted); display: flex; justify-content: space-between; margin-top: 4px;">
-                <span>Current Locality:</span>
-                <strong class="val-res-locality" style="color: var(--text-main);">Ward 4 - Palm Avenue</strong>
-              </div>
-
-              <!-- Distance Progress Bar -->
-              <div class="distance-bar-wrapper">
-                <div class="distance-bar-labels">
-                  <span>1.4 km</span>
-                  <span>500 m Geofence</span>
-                  <span>Arrived (0 m)</span>
-                </div>
-                <div class="distance-track">
-                  <div class="distance-progress"></div>
-                </div>
-              </div>
-            </div>
-
-            <!-- Resident Action Buttons -->
-            <div class="resident-actions">
-              <button class="btn-action btn-garbage-ready" id="btn-garbage-ready">
-                <span>🗑️</span>
-                <span>Mark Garbage Ready</span>
-              </button>
-              <button class="btn-action btn-pickup-request btn-open-pickup-modal">
-                <span>📦</span>
-                <span>Request Pickup (Away)</span>
-              </button>
-            </div>
-
-            <!-- Pickup Request Status Tracker -->
-            <div class="card" style="padding: 12px; margin-bottom: 0;">
-              <div style="font-size: 0.82rem; font-weight: 700; color: var(--text-main); margin-bottom: 6px;">
-                📋 Away-From-Home Pickup Status
-              </div>
-              <div class="resident-pickup-tracker-wrapper">
-                <!-- Dynamically injected -->
-              </div>
-            </div>
-
-            <!-- Notifications Drawer -->
-            <div class="notif-card">
-              <div style="font-size: 0.82rem; font-weight: 700; color: var(--text-main); margin-bottom: 6px; display: flex; justify-content: space-between;">
-                <span>🔔 Notification History</span>
-                <span style="font-size: 0.72rem; color: var(--primary); font-weight: 600;">Quiet Mode Active</span>
-              </div>
-              <div class="resident-notifications-list">
-                <!-- Dynamically injected -->
-              </div>
-            </div>
-
-          </div>
-        </div>
-
-        <!-- Resident Interactive Map -->
-        <div class="map-card">
-          <div class="map-card-header">
-            <div class="card-title">
-              <span>🗺️ Live GPS Garbage Vehicle Map</span>
-            </div>
-            <div style="display: flex; gap: 8px; font-size: 0.8rem;">
-              <span style="display: flex; align-items: center; gap: 4px;">
-                <span style="display: inline-block; width: 10px; height: 10px; border-radius: 50%; background: #10b981;"></span>
-                500m Geofence
-              </span>
-              <span style="display: flex; align-items: center; gap: 4px;">
-                <span style="display: inline-block; width: 10px; height: 10px; border-radius: 50%; background: #3b82f6;"></span>
-                House #125
-              </span>
+    <!-- ══ 1. Resident ═══════════════════════════════════════════════════ -->
+    <section class="view active" id="resident-view">
+      <div class="workspace">
+        <aside class="panel">
+          <div class="res-head">
+            <div class="res-identity">
+              <div class="eyebrow">Household <span class="val-res-house">#125</span></div>
+              <h1 class="res-name val-res-name">Priya Sharma</h1>
+              <p class="res-address val-res-address">House No. 125, 3rd Cross, Green Glen Sector</p>
             </div>
           </div>
-          <div class="map-view-container" id="resident-map-container"></div>
-        </div>
-
-      </div>
-    </section>
-
-    <!-- 2. DRIVER VIEW PANEL -->
-    <section class="view-panel" id="driver-view">
-      <!-- Driver Telemetry Header -->
-      <div class="driver-cab-header">
-        <div>
-          <div style="font-size: 1.25rem; font-weight: 800; display: flex; align-items: center; gap: 8px;">
-            <span>🚛 Vehicle #GV-04</span>
-            <span style="font-size: 0.82rem; background: #10b981; color: white; padding: 2px 8px; border-radius: 4px;">Active</span>
+          <div class="account-row">
+            <select class="select" id="resident-account-select" aria-label="Switch household"></select>
+            <button class="btn btn-quiet btn-sm" id="btn-open-register-modal">Register</button>
           </div>
-          <div style="font-size: 0.85rem; color: #94a3b8; margin-top: 4px; display: flex; align-items: center; gap: 10px; flex-wrap: wrap;">
-            <span>Driver: <strong id="drv-display-name">Ramesh Kumar</strong></span>
-            <span>•</span>
-            <span>Route: <strong>Ward 4 Residential Morning Circuit</strong></span>
-            <select id="driver-profile-select" style="background: #1e293b; color: #38bdf8; border: 1px solid #475569; border-radius: 4px; padding: 2px 8px; font-size: 0.75rem; font-weight: 600;">
-              <option value="Ramesh Kumar">Driver: Ramesh Kumar</option>
-              <option value="Sunita Rao">Driver: Sunita Rao</option>
-              <option value="Rajesh Singh">Driver: Rajesh Singh</option>
-            </select>
-          </div>
-        </div>
 
-        <div style="display: flex; gap: 10px; flex-wrap: wrap;">
-          <div class="driver-telemetry-badge">
-            <span style="color: #94a3b8; font-size: 0.75rem;">SPEED</span>
-            <strong class="val-drv-speed" style="font-size: 1.1rem; color: #10b981;">22 km/h</strong>
-          </div>
-          <div class="driver-telemetry-badge">
-            <span style="color: #94a3b8; font-size: 0.75rem;">HEADING</span>
-            <strong class="val-drv-heading" style="font-size: 1.1rem; color: #38bdf8;">Northeast ↗ (45°)</strong>
-          </div>
-          <div class="driver-telemetry-badge">
-            <span style="color: #94a3b8; font-size: 0.75rem;">LOCALITY</span>
-            <strong class="val-drv-locality" style="font-size: 0.95rem; color: #f8fafc;">Ward 4</strong>
-          </div>
-          <button class="sim-btn danger" id="btn-open-emergency-modal">
-            ⚠️ Report Issue
-          </button>
-        </div>
-      </div>
-
-      <!-- Driver Route Progress Bar -->
-      <div style="background: #ffffff; border: 1px solid var(--border); padding: 10px 16px; border-radius: var(--radius-md); margin-bottom: 16px;">
-        <div style="display: flex; justify-content: space-between; align-items: center; font-size: 0.82rem; font-weight: 700; margin-bottom: 6px;">
-          <span style="color: var(--text-main);">📍 Assigned Collection Route Progress: <span id="drv-route-step" style="color: var(--primary);">Waypoint 1 of 14</span></span>
-          <span id="drv-route-pct" style="background: #ecfdf5; color: #065f46; padding: 2px 8px; border-radius: 4px;">0% Completed</span>
-        </div>
-        <div style="height: 8px; background: #e2e8f0; border-radius: 4px; overflow: hidden;">
-          <div id="drv-route-progress-bar" style="width: 0%; height: 100%; background: linear-gradient(90deg, #10b981, #059669); transition: width 0.3s ease;"></div>
-        </div>
-      </div>
-
-      <div class="driver-layout">
-        <!-- Driver Map -->
-        <div class="map-card" style="height: 640px;">
-          <div class="map-card-header">
-            <div class="card-title">
-              <span>📍 In-Cab Navigation Map</span>
-            </div>
-            <div style="font-size: 0.82rem; color: var(--text-muted);">
-              Assigned Route & Registered Pickup Locations
-            </div>
-          </div>
-          <div class="map-view-container" id="driver-map-container"></div>
-        </div>
-
-        <!-- Driver Right Sidebar: Pending Pickups Queue -->
-        <div>
-          <div class="card" style="margin-bottom: 16px;">
-            <div class="card-header" style="margin-bottom: 10px; padding-bottom: 8px;">
-              <div class="card-title">
-                <span>📦 Registered Pickup Requests</span>
-              </div>
-            </div>
-            <div class="pickup-queue-list pickup-queue-container">
-              <!-- Dynamically populated -->
-            </div>
-          </div>
-        </div>
-      </div>
-    </section>
-
-    <!-- 3. MUNICIPAL ADMIN DASHBOARD -->
-    <section class="view-panel" id="admin-view">
-      <!-- Big KPI Stat Cards (With Loudspeaker Noise Reduction Highlight!) -->
-      <div class="admin-stats-grid" style="grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));">
-        <div class="stat-card noise">
-          <div class="stat-label">Loudspeaker Announcements Avoided</div>
-          <div class="stat-value" id="adm-announcements">138</div>
-          <div class="stat-note">🌿 Replaced by quiet 500m geofenced mobile alerts</div>
-        </div>
-
-        <div class="stat-card eco">
-          <div class="stat-label">Acoustic Decibel-Hours Saved</div>
-          <div class="stat-value" id="adm-decibels">69.0 dB·h</div>
-          <div class="stat-note">🔇 Eliminates ~85 dB residential megaphone pollution</div>
-        </div>
-
-        <div class="stat-card warning">
-          <div class="stat-label">Collection Efficiency</div>
-          <div class="stat-value" id="adm-efficiency">94.2%</div>
-          <div class="stat-note">On-schedule route completion rate</div>
-        </div>
-
-        <div class="stat-card info">
-          <div class="stat-label">Completed Collections Today</div>
-          <div class="stat-value" id="adm-pickups">19</div>
-          <div class="stat-note">Including away-from-home requests</div>
-        </div>
-
-        <div class="stat-card" style="border-left: 4px solid #ef4444; background: #fff;">
-          <div class="stat-label">Missed Collections</div>
-          <div class="stat-value" id="adm-missed" style="color: #ef4444;">0</div>
-          <div class="stat-note">Reported gate locked / inaccessible</div>
-        </div>
-      </div>
-
-      <!-- Dedicated Acoustic Noise-Reduction Comparison Banner -->
-      <div class="card noise-comparison-card" style="margin-bottom: 20px; background: linear-gradient(135deg, #064e3b 0%, #065f46 100%); color: white; border: none; padding: 18px 24px; border-radius: var(--radius-lg);">
-        <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 16px;">
-          <div style="max-width: 650px;">
-            <div style="font-size: 1.15rem; font-weight: 800; display: flex; align-items: center; gap: 8px;">
-              <span>🌿 Zero-Noise Municipal Geofence System</span>
-              <span style="font-size: 0.72rem; background: #10b981; color: white; padding: 3px 10px; border-radius: 9999px; font-weight: 700; letter-spacing: 0.5px;">QUIET CITY INITIATIVE</span>
-            </div>
-            <p style="font-size: 0.85rem; color: #a7f3d0; margin-top: 6px; line-height: 1.45;">
-              Traditional garbage trucks repeatedly blast noisy megaphones (85 dB) every 50 meters, causing chronic disturbance to sleeping infants, students, senior citizens, and patients. Our system completely eliminates loud megaphones using automatic 500m geofenced smartphone notifications + a polite digital chime!
-            </p>
-          </div>
-          <div class="noise-comparison-bars" style="min-width: 300px; background: rgba(0,0,0,0.25); padding: 12px 18px; border-radius: var(--radius-md);">
-            <div style="margin-bottom: 10px;">
-              <div style="display: flex; justify-content: space-between; font-size: 0.78rem; font-weight: 700; color: #fca5a5;">
-                <span>📢 Old Loudspeaker Blasts</span>
-                <span>85 dB (Disturbing / Loud)</span>
-              </div>
-              <div style="height: 8px; background: rgba(255,255,255,0.2); border-radius: 4px; overflow: hidden; margin-top: 4px;">
-                <div style="width: 85%; height: 100%; background: #ef4444;"></div>
-              </div>
-            </div>
+          <div class="alert geofence-alert-box" role="status">
+            <span class="alert-ring" aria-hidden="true"></span>
             <div>
-              <div style="display: flex; justify-content: space-between; font-size: 0.78rem; font-weight: 700; color: #6ee7b7;">
-                <span>📱 Smart 500m Geofenced Alert</span>
-                <span>25 dB (Pleasant Chime)</span>
-              </div>
-              <div style="height: 8px; background: rgba(255,255,255,0.2); border-radius: 4px; overflow: hidden; margin-top: 4px;">
-                <div style="width: 25%; height: 100%; background: #10b981;"></div>
-              </div>
+              <div class="alert-title">Collection vehicle approaching</div>
+              <p class="alert-text">Garbage collection vehicle is approximately <strong class="val-res-distance">500 m</strong> away. Please keep your garbage ready.</p>
             </div>
           </div>
-        </div>
-      </div>
 
-      <!-- Citywide Fleet Map -->
-      <div class="map-card" style="height: 480px; margin-bottom: 20px;">
-        <div class="map-card-header">
-          <div class="card-title">
-            <span>🏛️ Municipal Real-Time City Fleet Tracking Map</span>
-          </div>
-          <span style="font-size: 0.82rem; background: #ecfdf5; color: #065f46; padding: 4px 10px; border-radius: 4px; font-weight: 600;">
-            Ward 4 Active Monitoring Zone
-          </span>
-        </div>
-        <div class="map-view-container" id="admin-map-container"></div>
-      </div>
-
-      <!-- Data Tables Grid -->
-      <div class="admin-tables-grid">
-        <!-- Vehicles Telemetry Table -->
-        <div class="card">
-          <div class="card-header">
-            <div class="card-title">
-              <span>🚛 Active Collection Fleet</span>
+          <div class="hero">
+            <div class="eyebrow"><span class="live-dot" aria-hidden="true"></span> Vehicle GV-04 · live</div>
+            <div class="hero-value"><span class="val-res-distance-num">1.30</span><span class="hero-unit val-res-distance-unit">km</span></div>
+            <p class="hero-sub">from your gate</p>
+            <div class="track">
+              <div class="track-fill distance-progress"></div>
+              <span class="track-mark" style="left: 64.3%;" title="500 m geofence"></span>
             </div>
+            <div class="track-labels"><span>1.4 km</span><span class="track-labels-mid">500 m zone</span><span>Gate</span></div>
           </div>
-          <table class="data-table">
-            <thead>
-              <tr>
-                <th>Vehicle</th>
-                <th>Driver</th>
-                <th>Registration</th>
-                <th>Locality</th>
-                <th>Speed</th>
-                <th>Heading</th>
-                <th>Route Progress</th>
-                <th>Status</th>
-              </tr>
-            </thead>
-            <tbody id="admin-vehicles-tbody">
-              <!-- Dynamically filled -->
-            </tbody>
-          </table>
-        </div>
 
-        <!-- Registered Households Table -->
-        <div class="card">
-          <div class="card-header">
-            <div class="card-title">
-              <span>🏠 Registered Households (Ward 4)</span>
-            </div>
-          </div>
-          <table class="data-table">
-            <thead>
-              <tr>
-                <th>House #</th>
-                <th>Resident</th>
-                <th>Ward</th>
-                <th>Distance</th>
-                <th>500m Geofence</th>
-                <th>Bins Status</th>
-              </tr>
-            </thead>
-            <tbody id="admin-houses-tbody">
-              <!-- Dynamically filled -->
-            </tbody>
-          </table>
-        </div>
+          <dl class="stats">
+            <div><dt>Heading</dt><dd class="val-res-direction">Northeast ↗</dd></div>
+            <div><dt>Arrival</dt><dd class="val-res-eta">~3 min</dd></div>
+            <div class="stats-wide"><dt>Locality</dt><dd class="val-res-locality">Ward 4</dd></div>
+          </dl>
 
-        <!-- Away-From-Home Pickup Requests Table -->
-        <div class="card" style="grid-column: 1 / -1;">
-          <div class="card-header">
-            <div class="card-title">
-              <span>📦 Away-From-Home Pickup Requests</span>
-            </div>
+          <div class="actions">
+            <button class="btn btn-ready btn-garbage-ready"><span class="btn-dot" aria-hidden="true"></span><span class="btn-label">Mark garbage ready</span></button>
+            <button class="btn btn-outline btn-open-pickup-modal">Request pickup</button>
           </div>
-          <table class="data-table">
-            <thead>
-              <tr>
-                <th>Request ID</th>
-                <th>House #</th>
-                <th>Resident</th>
-                <th>Ward / Address</th>
-                <th>Landmark</th>
-                <th>Instructions</th>
-                <th>Status</th>
-              </tr>
-            </thead>
-            <tbody id="admin-pickups-tbody">
-              <!-- Dynamically filled -->
-            </tbody>
-          </table>
+
+          <section class="block">
+            <h2 class="block-title">Pickup requests</h2>
+            <div class="resident-pickup-tracker-wrapper"></div>
+          </section>
+
+          <section class="block">
+            <h2 class="block-title">Activity <span class="block-note">Quiet mode</span></h2>
+            <div class="resident-notifications-list"></div>
+          </section>
+        </aside>
+
+        <div class="map-shell">
+          <div class="map" id="resident-map-container"></div>
+          <div class="map-legend">
+            <span><i class="lg lg-vehicle"></i>Vehicle</span>
+            <span><i class="lg lg-zone"></i>500 m zone</span>
+            <span><i class="lg lg-home"></i><span class="val-res-house">#125</span></span>
+            <span><i class="lg lg-pickup"></i>Pickup</span>
+          </div>
         </div>
       </div>
     </section>
 
-    <!-- 4. SPLIT DEMO MODE (Side-by-Side Presentation View) -->
-    <section class="view-panel" id="split-view">
-      <div class="card" style="margin-bottom: 16px; background: #f0fdf4; border-color: #bbf7d0;">
-        <div style="display: flex; justify-content: space-between; align-items: center;">
+    <!-- ══ 2. Driver ═════════════════════════════════════════════════════ -->
+    <section class="view" id="driver-view">
+      <div class="workspace workspace-reverse">
+        <div class="map-shell">
+          <div class="map" id="driver-map-container"></div>
+          <div class="map-hud">
+            <div><span class="hud-label">Speed</span><span class="hud-value val-drv-speed">22 km/h</span></div>
+            <div><span class="hud-label">Heading</span><span class="hud-value val-drv-heading">NE</span></div>
+          </div>
+        </div>
+
+        <aside class="panel">
+          <div class="eyebrow">Vehicle GV-04 · KA-05-GV-2024</div>
+          <h1 class="res-name" id="drv-display-name">Ramesh Kumar</h1>
+          <div class="account-row">
+            <select class="select" id="driver-profile-select" aria-label="Driver on duty">
+              <option value="Ramesh Kumar">Ramesh Kumar</option>
+              <option value="Sunita Rao">Sunita Rao</option>
+              <option value="Rajesh Singh">Rajesh Singh</option>
+            </select>
+            <button class="btn btn-danger-quiet btn-sm" id="btn-open-emergency-modal">Report issue</button>
+          </div>
+
+          <div class="route-progress">
+            <div class="route-progress-head">
+              <span id="drv-route-step">Waypoint 1 of 14</span>
+              <span class="mono" id="drv-route-pct">0%</span>
+            </div>
+            <div class="track"><div class="track-fill" id="drv-route-progress-bar"></div></div>
+            <div class="route-progress-sub">Ward 4 residential morning circuit</div>
+          </div>
+
+          <dl class="stats">
+            <div><dt>Speed</dt><dd class="val-drv-speed">22 km/h</dd></div>
+            <div><dt>Heading</dt><dd class="val-drv-heading">NE</dd></div>
+            <div class="stats-wide"><dt>Locality</dt><dd class="val-drv-locality">Ward 4</dd></div>
+          </dl>
+
+          <section class="block">
+            <h2 class="block-title">Pickup queue <span class="block-note">Nearest first</span></h2>
+            <div class="pickup-queue-container"></div>
+          </section>
+
+          <section class="block">
+            <h2 class="block-title">Bins ready at gate</h2>
+            <div class="driver-ready-bins"></div>
+          </section>
+        </aside>
+      </div>
+    </section>
+
+    <!-- ══ 3. Municipal ══════════════════════════════════════════════════ -->
+    <section class="view" id="admin-view">
+      <div class="page">
+        <div class="page-head">
           <div>
-            <strong style="color: #166534; font-size: 1rem;">🔀 Split Presentation Mode</strong>
-            <p style="font-size: 0.82rem; color: #15803d; margin-top: 2px;">
-              Ideal for demonstrations & project review: Watch the vehicle advance on the driver screen while simultaneously observing the 500m geofence chime alert pop up on the resident mobile phone!
-            </p>
+            <div class="eyebrow">Municipal dashboard</div>
+            <h1 class="page-title">Ward 4, <em>today</em></h1>
           </div>
-          <button class="sim-btn primary" onclick="document.getElementById('btn-sim-play').click()">
-            Toggle Route Simulation
-          </button>
+          <p class="page-lede">Every loudspeaker announcement replaced by a quiet 500&nbsp;m geofenced alert.</p>
         </div>
-      </div>
 
-      <div class="split-layout">
-        <!-- Left: Resident Mobile Screen -->
-        <div>
-          <div class="resident-mobile-frame" style="height: 720px;">
-            <div class="mobile-notch">
-              <div class="mobile-notch-camera"></div>
-              <div class="mobile-notch-speaker"></div>
-            </div>
-            <div class="mobile-content">
-              <div class="resident-info-bar">
-                <div>
-                  <div style="font-weight: 700; font-size: 0.95rem;">Priya Sharma</div>
-                  <div style="font-size: 0.75rem; color: var(--text-muted);">Ward 4 - 3rd Cross</div>
-                </div>
-                <div class="house-badge">House #125</div>
-              </div>
-
-              <!-- Geofence Alert -->
-              <div class="geofence-alert-box">
-                <div class="alert-header">
-                  <span>🚨</span>
-                  <span>Garbage Vehicle Approaching!</span>
-                </div>
-                <div class="alert-text">
-                  Garbage collection vehicle is approximately <strong><span class="val-res-distance">500 m</span></strong> away. 
-                  Please keep your garbage ready outside.
-                </div>
-              </div>
-
-              <!-- Telemetry -->
-              <div class="vehicle-status-card">
-                <div class="telemetry-row">
-                  <div class="metric-pill">
-                    <div class="label">Distance</div>
-                    <div class="value highlight val-res-distance">650 m</div>
-                  </div>
-                  <div class="metric-pill">
-                    <div class="label">Direction</div>
-                    <div class="value val-res-direction">Northeast ↗</div>
-                  </div>
-                  <div class="metric-pill">
-                    <div class="label">Est. Arrival</div>
-                    <div class="value val-res-eta">~3 min</div>
-                  </div>
-                </div>
-                <div class="distance-track">
-                  <div class="distance-progress"></div>
-                </div>
-              </div>
-
-              <!-- Actions -->
-              <div class="resident-actions">
-                <button class="btn-action btn-garbage-ready">
-                  <span>🗑️</span>
-                  <span>Mark Garbage Ready</span>
-                </button>
-                <button class="btn-action btn-pickup-request btn-open-pickup-modal">
-                  <span>📦</span>
-                  <span>Request Pickup</span>
-                </button>
-              </div>
-
-              <div class="resident-pickup-tracker-wrapper"></div>
-              <div class="notif-card">
-                <div style="font-weight: 700; font-size: 0.8rem; margin-bottom: 6px;">🔔 Notification Feed</div>
-                <div class="resident-notifications-list"></div>
-              </div>
-            </div>
+        <div class="kpis">
+          <div class="kpi kpi-feature">
+            <div class="kpi-label">Announcements avoided</div>
+            <div class="kpi-value" id="adm-announcements">138</div>
+            <div class="kpi-note">Replaced by geofenced mobile alerts</div>
+          </div>
+          <div class="kpi">
+            <div class="kpi-label">Decibel-hours saved</div>
+            <div class="kpi-value" id="adm-decibels">69.0</div>
+            <div class="kpi-note">vs. 85 dB megaphone broadcasts</div>
+          </div>
+          <div class="kpi">
+            <div class="kpi-label">Collection efficiency</div>
+            <div class="kpi-value" id="adm-efficiency">95.0%</div>
+            <div class="kpi-note" id="adm-schedule">Route running on schedule</div>
+          </div>
+          <div class="kpi">
+            <div class="kpi-label">Collections today</div>
+            <div class="kpi-value" id="adm-pickups">19</div>
+            <div class="kpi-note">Including away-from-home requests</div>
+          </div>
+          <div class="kpi">
+            <div class="kpi-label">Missed</div>
+            <div class="kpi-value" id="adm-missed">1</div>
+            <div class="kpi-note">Gate locked or inaccessible</div>
           </div>
         </div>
 
-        <!-- Right: Driver Navigation & Pickup Collector -->
-        <div>
-          <div class="map-card" style="height: 440px; margin-bottom: 16px;">
-            <div class="map-card-header">
-              <div class="card-title">
-                <span>🚛 Driver In-Cab Live Map</span>
-              </div>
-              <div style="font-size: 0.82rem; font-weight: 600;">
-                Speed: <span class="val-drv-speed" style="color: var(--primary);">22 km/h</span> | 
-                Heading: <span class="val-drv-heading" style="color: var(--info);">NE ↗</span>
-              </div>
+        <div class="admin-grid">
+          <div class="card card-map">
+            <div class="card-head">
+              <h2 class="card-title">Fleet</h2>
+              <span class="card-meta"><span class="live-dot" aria-hidden="true"></span> Live</span>
             </div>
-            <div class="map-view-container" id="split-map-container"></div>
+            <div class="map-shell map-shell-card"><div class="map" id="admin-map-container"></div></div>
           </div>
 
-          <!-- Pickup queue on driver side -->
-          <div class="card">
-            <div class="card-header">
-              <div class="card-title">
-                <span>📦 Driver Pickup Queue (One-Click Collect)</span>
-              </div>
+          <div class="card noise-card">
+            <div class="card-head"><h2 class="card-title">Noise comparison</h2></div>
+            <div class="noise-row">
+              <div class="noise-meta"><span>Loudspeaker broadcast</span><span class="mono">85 dB</span></div>
+              <div class="noise-bar"><span style="width: 85%;"></span></div>
             </div>
-            <div class="pickup-queue-list pickup-queue-container" style="max-height: 240px;"></div>
+            <div class="noise-row noise-row-quiet">
+              <div class="noise-meta"><span>Geofenced chime</span><span class="mono">25 dB</span></div>
+              <div class="noise-bar"><span style="width: 25%;"></span></div>
+            </div>
+            <p class="noise-copy">Trucks that broadcast every 50 m disturb infants, students, senior citizens and night-shift workers. A single notification at 500 m does the same job silently.</p>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="card-head"><h2 class="card-title">Fleet telemetry</h2></div>
+          <div class="table-wrap">
+            <table class="table">
+              <thead><tr><th>Vehicle</th><th>Driver</th><th>Registration</th><th>Locality</th><th>Speed</th><th>Heading</th><th>Route</th><th>Status</th></tr></thead>
+              <tbody id="admin-vehicles-tbody"></tbody>
+            </table>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="card-head"><h2 class="card-title">Households</h2></div>
+          <div class="table-wrap">
+            <table class="table">
+              <thead><tr><th>House</th><th>Resident</th><th>Ward</th><th>Distance</th><th>500 m zone</th><th>Bins</th></tr></thead>
+              <tbody id="admin-houses-tbody"></tbody>
+            </table>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="card-head"><h2 class="card-title">Away-from-home pickups</h2></div>
+          <div class="table-wrap">
+            <table class="table">
+              <thead><tr><th>Request</th><th>House</th><th>Resident</th><th>Address</th><th>Landmark</th><th>Instructions</th><th>Status</th></tr></thead>
+              <tbody id="admin-pickups-tbody"></tbody>
+            </table>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="card-head"><h2 class="card-title">Driver issues &amp; delays</h2></div>
+          <div class="table-wrap">
+            <table class="table">
+              <thead><tr><th>Report</th><th>Vehicle</th><th>Driver</th><th>Issue</th><th>Details</th><th>Locality</th><th>Reported</th></tr></thead>
+              <tbody id="admin-emergency-tbody"></tbody>
+            </table>
           </div>
         </div>
       </div>
     </section>
 
+    <!-- ══ 4. Split demo ═════════════════════════════════════════════════ -->
+    <section class="view" id="split-view">
+      <div class="workspace">
+        <aside class="panel">
+          <div class="split-tag">Resident</div>
+          <div class="res-identity">
+            <div class="eyebrow">Household <span class="val-res-house">#125</span></div>
+            <h1 class="res-name val-res-name">Priya Sharma</h1>
+            <p class="res-address val-res-address"></p>
+          </div>
+
+          <div class="alert geofence-alert-box" role="status">
+            <span class="alert-ring" aria-hidden="true"></span>
+            <div>
+              <div class="alert-title">Collection vehicle approaching</div>
+              <p class="alert-text">Garbage collection vehicle is approximately <strong class="val-res-distance">500 m</strong> away. Please keep your garbage ready.</p>
+            </div>
+          </div>
+
+          <div class="hero hero-compact">
+            <div class="hero-value"><span class="val-res-distance-num">1.30</span><span class="hero-unit val-res-distance-unit">km</span></div>
+            <div class="track">
+              <div class="track-fill distance-progress"></div>
+              <span class="track-mark" style="left: 64.3%;"></span>
+            </div>
+          </div>
+
+          <dl class="stats">
+            <div><dt>Heading</dt><dd class="val-res-direction">—</dd></div>
+            <div><dt>Arrival</dt><dd class="val-res-eta">—</dd></div>
+          </dl>
+
+          <div class="actions">
+            <button class="btn btn-ready btn-garbage-ready"><span class="btn-dot" aria-hidden="true"></span><span class="btn-label">Mark garbage ready</span></button>
+            <button class="btn btn-outline btn-open-pickup-modal">Request pickup</button>
+          </div>
+
+          <section class="block">
+            <h2 class="block-title">Pickup requests</h2>
+            <div class="resident-pickup-tracker-wrapper"></div>
+          </section>
+          <section class="block">
+            <h2 class="block-title">Activity</h2>
+            <div class="resident-notifications-list"></div>
+          </section>
+        </aside>
+
+        <div class="split-right">
+          <div class="map-shell">
+            <div class="split-tag split-tag-floating">Driver</div>
+            <div class="map" id="split-map-container"></div>
+            <div class="map-hud">
+              <div><span class="hud-label">Speed</span><span class="hud-value val-drv-speed">—</span></div>
+              <div><span class="hud-label">Heading</span><span class="hud-value val-drv-heading">—</span></div>
+            </div>
+          </div>
+          <div class="card">
+            <div class="card-head"><h2 class="card-title">Driver pickup queue</h2></div>
+            <div class="pickup-queue-container queue-scroll"></div>
+          </div>
+        </div>
+      </div>
+    </section>
   </main>
 
-  <!-- Modal 1: Away-From-Home Pickup Request -->
+  <!-- ══ GPS route simulator dock ═══════════════════════════════════════ -->
+  <div class="dock" role="toolbar" aria-label="GPS route simulator">
+    <div class="dock-row">
+      <div class="dock-group">
+        <button class="dock-play" id="btn-sim-play" aria-label="Play simulation">
+          <svg class="ico-play" viewBox="0 0 24 24"><path d="M8 5.5v13l11-6.5z"/></svg>
+          <svg class="ico-pause" viewBox="0 0 24 24"><path d="M8 5v14M16 5v14"/></svg>
+        </button>
+        <button class="icon-btn" id="btn-sim-step-back" title="Step backward" aria-label="Step backward">
+          <svg viewBox="0 0 24 24"><path d="M15 6l-6 6 6 6"/></svg>
+        </button>
+        <button class="icon-btn" id="btn-sim-step-fwd" title="Step forward" aria-label="Step forward">
+          <svg viewBox="0 0 24 24"><path d="M9 6l6 6-6 6"/></svg>
+        </button>
+        <button class="icon-btn" id="btn-sim-reset" title="Reset to route start" aria-label="Reset">
+          <svg viewBox="0 0 24 24"><path d="M4 12a8 8 0 1 0 2.4-5.7"/><path d="M4 4v4h4"/></svg>
+        </button>
+      </div>
+
+      <div class="speed-seg" role="group" aria-label="Playback speed">
+        <button class="speed-opt active" data-speed="1" title="1x (Normal)">1×</button>
+        <button class="speed-opt" data-speed="2" title="2x (Fast)">2×</button>
+        <button class="speed-opt" data-speed="4" title="4x (Rapid)">4×</button>
+      </div>
+
+      <div class="dock-status">
+        <span class="dock-step mono" id="sim-step-count">01/14</span>
+        <span class="dock-label" id="sim-waypoint-label">Route start</span>
+      </div>
+
+      <button class="icon-btn dock-toggle" id="btn-dock-toggle" aria-expanded="true" title="Hide simulator controls" aria-label="Hide simulator controls">
+        <svg viewBox="0 0 24 24"><path d="M6 9l6 6 6-6"/></svg>
+      </button>
+    </div>
+
+    <div class="dock-chips">
+      <button class="chip shortcut-chip" data-index="0">1.3 km Start</button>
+      <button class="chip shortcut-chip" data-index="2">900 m Palm Ave</button>
+      <button class="chip shortcut-chip" data-index="3">720 m House 88</button>
+      <button class="chip chip-key shortcut-chip" data-index="5">480 m · Geofence trigger</button>
+      <button class="chip shortcut-chip" data-index="7">150 m Approach</button>
+      <button class="chip shortcut-chip" data-index="8">House 125 Arrival</button>
+    </div>
+  </div>
+
+  <!-- ══ Modal: Away-from-home pickup ═══════════════════════════════════ -->
   <div class="modal-overlay" id="pickup-modal">
-    <div class="modal-box">
-      <div class="modal-header">
-        <div class="modal-title">📦 Away-From-Home Garbage Pickup Request</div>
-        <button class="modal-close btn-close-pickup-modal">&times;</button>
+    <div class="modal" role="dialog" aria-modal="true" aria-labelledby="pickup-modal-title">
+      <div class="modal-head">
+        <div>
+          <div class="eyebrow">Away from home</div>
+          <h2 class="modal-title" id="pickup-modal-title">Request a pickup</h2>
+        </div>
+        <button class="icon-btn btn-close-pickup-modal" aria-label="Close"><svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg></button>
       </div>
       <form id="pickup-request-form">
         <div class="modal-body">
-          <p style="font-size: 0.82rem; color: var(--text-muted);">
-            If you are not at home, submit your details below so the garbage collection driver will collect the waste kept outside your house.
-          </p>
-
-          <div class="form-group">
-            <label class="form-label">House Number</label>
-            <input type="text" class="form-input" id="req-house-no" value="125" required>
+          <p class="modal-lede">Leave your bags outside and the driver will collect them, even if nobody is home.</p>
+          <div class="field-row">
+            <label class="field"><span>House number</span><input type="text" class="input" id="req-house-no" required></label>
+            <label class="field"><span>Resident name</span><input type="text" class="input" id="req-resident-name" required></label>
           </div>
-
-          <div class="form-group">
-            <label class="form-label">Resident Name</label>
-            <input type="text" class="form-input" id="req-resident-name" value="Priya Sharma" required>
+          <label class="field"><span>Ward / locality</span><input type="text" class="input" id="req-ward" required></label>
+          <label class="field"><span>Pickup address</span><input type="text" class="input" id="req-address" required></label>
+          <div class="field-row">
+            <label class="field"><span>Landmark <em>optional</em></span><input type="text" class="input" id="req-landmark" placeholder="Black iron gate, left porch"></label>
+            <label class="field"><span>Type of waste</span>
+              <select class="input" id="req-waste-type">
+                <option value="Segregated (Wet & Dry)">Segregated (wet &amp; dry)</option>
+                <option value="Dry Recyclables">Dry recyclables / cardboard</option>
+                <option value="Wet Kitchen Waste">Wet kitchen waste</option>
+                <option value="Electronic Waste">E-waste</option>
+              </select>
+            </label>
           </div>
-
-          <div class="form-group">
-            <label class="form-label">Ward / Locality</label>
-            <input type="text" class="form-input" id="req-ward" value="Ward 4 - Green Glen Sector" required>
-          </div>
-
-          <div class="form-group">
-            <label class="form-label">Optional Landmark</label>
-            <input type="text" class="form-input" id="req-landmark" value="Black iron gate, left porch">
-          </div>
-
-          <div class="form-group">
-            <label class="form-label">Type of Waste</label>
-            <select class="form-select" id="req-waste-type">
-              <option value="Segregated (Wet & Dry)">Segregated (Wet & Dry)</option>
-              <option value="Dry Recyclables">Dry Recyclables / Cardboard</option>
-              <option value="Wet Kitchen Waste">Wet Kitchen Waste</option>
-              <option value="Electronic Waste">E-Waste</option>
-            </select>
-          </div>
-
-          <div class="form-group">
-            <label class="form-label">Pickup Instructions for Driver</label>
-            <textarea class="form-textarea" id="req-note" required>Please collect the garbage bags kept outside my house beside the gate.</textarea>
-          </div>
+          <label class="field"><span>Instructions for the driver</span><textarea class="input" id="req-note" rows="3" required placeholder="Two bags beside the gate."></textarea></label>
         </div>
-
-        <div class="modal-footer">
-          <button type="button" class="btn-secondary btn-close-pickup-modal">Cancel</button>
-          <button type="submit" class="btn-primary">Submit Pickup Request</button>
+        <div class="modal-foot">
+          <button type="button" class="btn btn-quiet btn-close-pickup-modal">Cancel</button>
+          <button type="submit" class="btn btn-primary">Submit request</button>
         </div>
       </form>
     </div>
   </div>
 
-  <!-- Modal 2: Driver Emergency / Issue Report -->
+  <!-- ══ Modal: Driver issue ════════════════════════════════════════════ -->
   <div class="modal-overlay" id="emergency-modal">
-    <div class="modal-box">
-      <div class="modal-header">
-        <div class="modal-title">⚠️ Report Driver Issue / Delay</div>
-        <button class="modal-close btn-close-emergency-modal">&times;</button>
+    <div class="modal" role="dialog" aria-modal="true" aria-labelledby="emergency-modal-title">
+      <div class="modal-head">
+        <div>
+          <div class="eyebrow">Broadcast to all residents</div>
+          <h2 class="modal-title" id="emergency-modal-title">Report an issue</h2>
+        </div>
+        <button class="icon-btn btn-close-emergency-modal" aria-label="Close"><svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg></button>
       </div>
       <form id="emergency-form">
         <div class="modal-body">
-          <div class="form-group">
-            <label class="form-label">Issue Type</label>
-            <select class="form-select" id="emerg-type">
-              <option value="Traffic Jam / Narrow Lane Blocked">Traffic Jam / Narrow Lane Blocked</option>
-              <option value="Compactor Bin Full - Proceeding to Depot">Compactor Bin Full - Proceeding to Depot</option>
-              <option value="Vehicle Breakdown / Puncture">Vehicle Breakdown / Puncture</option>
-              <option value="Road Construction / Diversion">Road Construction / Diversion</option>
+          <label class="field"><span>Issue</span>
+            <select class="input" id="emerg-type">
+              <option value="Traffic Jam / Narrow Lane Blocked">Traffic jam / lane blocked</option>
+              <option value="Compactor Bin Full - Proceeding to Depot">Compactor full, returning to depot</option>
+              <option value="Vehicle Breakdown / Puncture">Breakdown / puncture</option>
+              <option value="Road Construction / Diversion">Road construction / diversion</option>
             </select>
-          </div>
-
-          <div class="form-group">
-            <label class="form-label">Details / Delay Estimate</label>
-            <textarea class="form-textarea" id="emerg-msg" required>Encountered road blockage at 2nd Cross. Expected delay 10-15 minutes.</textarea>
-          </div>
+          </label>
+          <label class="field"><span>Details and delay estimate</span><textarea class="input" id="emerg-msg" rows="3" required placeholder="Road blocked at 2nd Cross. Expect a 10–15 minute delay."></textarea></label>
         </div>
-
-        <div class="modal-footer">
-          <button type="button" class="btn-secondary btn-close-emergency-modal">Cancel</button>
-          <button type="submit" class="btn-primary" style="background: var(--danger);">Broadcast Delay Notice</button>
+        <div class="modal-foot">
+          <button type="button" class="btn btn-quiet btn-close-emergency-modal">Cancel</button>
+          <button type="submit" class="btn btn-danger">Broadcast delay notice</button>
         </div>
       </form>
     </div>
   </div>
 
-  <!-- Modal 3: Register / Update Household -->
+  <!-- ══ Modal: Register household ══════════════════════════════════════ -->
   <div class="modal-overlay" id="register-modal">
-    <div class="modal-box">
-      <div class="modal-header">
-        <div class="modal-title">🏠 Register / Update Household</div>
-        <button class="modal-close btn-close-register-modal">&times;</button>
+    <div class="modal" role="dialog" aria-modal="true" aria-labelledby="register-modal-title">
+      <div class="modal-head">
+        <div>
+          <div class="eyebrow">Quiet alerts</div>
+          <h2 class="modal-title" id="register-modal-title">Register a household</h2>
+        </div>
+        <button class="icon-btn btn-close-register-modal" aria-label="Close"><svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg></button>
       </div>
       <form id="register-house-form">
         <div class="modal-body">
-          <p style="font-size: 0.82rem; color: var(--text-muted); margin-bottom: 12px;">
-            Register your house on the Smart Waste System to receive automatic 500m quiet geofence arrival alerts instead of loudspeaker noise.
-          </p>
-
-          <div class="form-group">
-            <label class="form-label">House Number</label>
-            <input type="text" class="form-input" id="reg-house-no" placeholder="e.g. 150" required>
+          <p class="modal-lede">Get a quiet alert when the truck is 500 m away, instead of a loudspeaker.</p>
+          <div class="field-row">
+            <label class="field"><span>House number</span><input type="text" class="input" id="reg-house-no" placeholder="150" required></label>
+            <label class="field"><span>Resident name</span><input type="text" class="input" id="reg-resident-name" placeholder="Rahul Sharma" required></label>
           </div>
-
-          <div class="form-group">
-            <label class="form-label">Resident Full Name</label>
-            <input type="text" class="form-input" id="reg-resident-name" placeholder="e.g. Rahul Sharma" required>
+          <label class="field"><span>Ward / sector</span><input type="text" class="input" id="reg-ward" value="Ward 4 - Green Glen Sector" required></label>
+          <label class="field"><span>Street address</span><input type="text" class="input" id="reg-address" placeholder="House No. 150, 4th Cross" required></label>
+          <div class="field-row">
+            <label class="field"><span>Landmark <em>optional</em></span><input type="text" class="input" id="reg-landmark" placeholder="Near Rose Garden"></label>
+            <label class="field"><span>Phone</span><input type="text" class="input" id="reg-contact" placeholder="+91 98123 45678"></label>
           </div>
-
-          <div class="form-group">
-            <label class="form-label">Ward / Sector</label>
-            <input type="text" class="form-input" id="reg-ward" value="Ward 4 - Green Glen Sector" required>
-          </div>
-
-          <div class="form-group">
-            <label class="form-label">Street Address</label>
-            <input type="text" class="form-input" id="reg-address" placeholder="e.g. House No. 150, 4th Cross" required>
-          </div>
-
-          <div class="form-group">
-            <label class="form-label">Landmark (Optional)</label>
-            <input type="text" class="form-input" id="reg-landmark" placeholder="e.g. Near Rose Garden / Opposite Clinic">
-          </div>
-
-          <div class="form-group">
-            <label class="form-label">Phone Contact</label>
-            <input type="text" class="form-input" id="reg-contact" placeholder="+91 98123 45678">
-          </div>
-
-          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px;">
-            <div class="form-group">
-              <label class="form-label">Latitude</label>
-              <input type="number" step="0.00001" class="form-input" id="reg-lat" value="12.94150">
-            </div>
-            <div class="form-group">
-              <label class="form-label">Longitude</label>
-              <input type="number" step="0.00001" class="form-input" id="reg-lon" value="77.62900">
-            </div>
+          <div class="field-row">
+            <label class="field"><span>Latitude</span><input type="number" step="0.00001" class="input mono" id="reg-lat" value="12.94150"></label>
+            <label class="field"><span>Longitude</span><input type="number" step="0.00001" class="input mono" id="reg-lon" value="77.62900"></label>
           </div>
         </div>
-
-        <div class="modal-footer">
-          <button type="button" class="btn-secondary btn-close-register-modal">Cancel</button>
-          <button type="submit" class="btn-primary">Register Household</button>
+        <div class="modal-foot">
+          <button type="button" class="btn btn-quiet btn-close-register-modal">Cancel</button>
+          <button type="submit" class="btn btn-primary">Register household</button>
         </div>
       </form>
     </div>
   </div>
 
-  <!-- Toast Notification Container -->
-  <div class="toast-container" id="toast-container"></div>
+  <div class="toast-container" id="toast-container" aria-live="polite"></div>
 
-  <!-- Leaflet Map JS -->
-  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" 
-          integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
+  <!-- MapLibre GL JS — basemap tiles from OpenFreeMap (OpenStreetMap data, no API key) -->
+  <script src="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.js"
+          integrity="sha384-SYKAG6cglRMN0RVvhNeBY0r3FYKNOJtznwA0v7B5Vp9tr31xAHsZC0DqkQ/pZDmj" crossorigin="anonymous"></script>
 
   <!-- Application JS Scripts (load order matters) -->
   <script src="/js/geoUtils.js"></script>
+  <script src="/js/routeData.js"></script>
   <script src="/js/dataStore.js"></script>
   <script src="/js/simulatorEngine.js"></script>
   <script src="/js/audioChime.js"></script>
