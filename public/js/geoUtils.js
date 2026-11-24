@@ -79,12 +79,29 @@
       : { seconds: sec, formatted: `~${Math.ceil(sec / 60)} min` };
   }
 
+  // The alert distance that applies to a household: its own choice, else the
+  // ward default, kept inside the range admins allow (mirrors the database)
+  function effectiveAlertRadius(house, settings) {
+    const s = settings || {};
+    const min = s.alertRadiusMinM || 50, max = s.alertRadiusMaxM || 5000;
+    const wanted = house && house.alertRadiusM != null ? house.alertRadiusM : (s.geofenceRadiusM || 500);
+    return Math.min(max, Math.max(min, wanted));
+  }
+
+  // "750 m" / "1.2 km"
+  function formatMeters(m) {
+    if (m == null) return '—';
+    return m >= 1000 ? `${(m / 1000).toFixed(m % 1000 === 0 ? 0 : 1)} km` : `${Math.round(m)} m`;
+  }
+
   window.GeoUtils = {
     calculateHaversineDistance,
     calculateBearing,
     getBearingOctant,
     detectLocality,
     calculateETA,
+    effectiveAlertRadius,
+    formatMeters,
     MUNICIPAL_LOCALITIES,
   };
 })();
