@@ -104,12 +104,16 @@
       const wp = this.route[index];
       if (!wp) return;
 
+      // The simulator drives the tracked vehicle (a driver's own truck)
+      const vehicle = window.AppDataStore.getState().vehicles[0];
+      if (!vehicle) return;
+
       this.currentIndex = index;
 
       // Dynamic speed: faster on open road, slower near stops
       const speed = speedKmh > 0 ? (speedKmh * 1 + 15) : 20; // scale nicely
 
-      window.AppDataStore.updateVehicleLocation('GV-04', wp.lat, wp.lon, speed);
+      window.AppDataStore.updateVehicleLocation(vehicle.id, wp.lat, wp.lon, speed, { routeIndex: index, mode: 'simulator' });
 
       window.dispatchEvent(new CustomEvent('simulation_step', {
         detail: {
