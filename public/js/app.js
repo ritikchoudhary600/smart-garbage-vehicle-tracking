@@ -132,7 +132,6 @@
       this._setupUserMenu();
       this._setupPermissions();
       this._setupLiveGps();
-      this._setupLocationButtons();
       this._setupAlertRange();
       this._connectEvents();
       if (window.ControlPanel && this.role === 'admin') window.ControlPanel.init(this);
@@ -399,14 +398,23 @@
 
       // ── Register household ────────────────────────────────────────────
       const regForm = byId('register-house-form');
+      this.regPicker = window.LocationPicker.create({
+        mapId: 'reg-pick-map', latId: 'reg-lat', lonId: 'reg-lon', hintId: 'reg-location-hint', locateId: 'reg-locate',
+      });
       const reg = this._bindModal('register-modal', '.btn-open-register', '.btn-close-register-modal', () => {
         if (this.role === 'resident' && !byId('reg-resident-name').value) {
           byId('reg-resident-name').value = this.profile.fullName || '';
         }
         byId('reg-ward').value = byId('reg-ward').value || this.state.settings.wardName;
+        // Starts on the device's current location; the map is sized once the dialog shows
+        setTimeout(() => this.regPicker.open({ fallback: this._locationFallback() }), 30);
       });
       regForm.addEventListener('submit', async (e) => {
         e.preventDefault();
+        if (!this.regPicker.hasPin()) {
+          this._showToast('Pin your home first', 'Use your current location, or tap the map at your gate.', 'warning');
+          return;
+        }
         const house = await this._act(() => this.store.registerHouse({
           houseNo:      val('reg-house-no'),
           residentName: val('reg-resident-name'),
@@ -423,7 +431,6 @@
         this._updateUI();
         reg.close();
         regForm.reset();
-        byId('reg-location-hint').textContent = 'Stand at your gate for the most accurate pin.';
       });
 
       this._bindModal('permissions-modal', null, '.btn-close-permissions-modal');
@@ -479,6 +486,7 @@
         if (!e.target.closest('.user-menu')) this._closeUserMenu();
       });
       byId('btn-sign-out').addEventListener('click', () => window.Auth.signOut());
+      byId('btn-demo-pill').addEventListener('click', () => window.Auth.signOut());   // leave the demo
       byId('btn-open-permissions').addEventListener('click', () => {
         this._closeUserMenu();
         this._openPermissions();
@@ -587,25 +595,14 @@
       this._openPermissions();
     }
 
-    // "Use my current location" buttons fill a lat/lon pair
-    _setupLocationButtons() {
-      qsa('.btn-use-location').forEach(btn => {
-        btn.addEventListener('click', async () => {
-          const hint = byId(btn.dataset.hint);
-          btn.disabled = true;
-          if (hint) { hint.classList.remove('is-error'); hint.textContent = 'Finding your location…'; }
-          try {
-            const fix = await window.DeviceAccess.getPosition();
-            byId(btn.dataset.lat).value = fix.lat.toFixed(6);
-            byId(btn.dataset.lon).value = fix.lon.toFixed(6);
-            if (hint) hint.textContent = `Pinned to within ±${Math.round(fix.accuracy)} m.`;
-          } catch (err) {
-            if (hint) { hint.classList.add('is-error'); hint.textContent = err.message; }
-          } finally {
-            btn.disabled = false;
-          }
-        });
-      });
+    // Where a location pin starts if the device can't say where it is: the
+    // ward's own households, never the demo route
+    _locationFallback() {
+      const own = this._selectedHouse();
+      if (own) return [own.lat, own.lon];
+      const houses = this._mapHouses();
+      if (!houses.length) return null;
+      return [houses.reduce((s, h) => s + h.lat, 0) / houses.length, houses.reduce((s, h) => s + h.lon, 0) / houses.length];
     }
 
     /* ────────────────────────────────────────────────────────────────────
@@ -1272,6 +1269,47 @@
       return line;
     }
 
+    _mapHouses() {
+      return this.role === 'resident'
+        ? this.state.houses.filter(h => h.ownerId === this.profile.id)
+        : this.state.houses;
+    }
+
+    // What each map frames: what matters to this viewer (their household and a
+    // nearby truck, the driver's truck and stops, or the whole fleet), never the
+    // demo route unless there is nothing else. The key changes only when that
+    // set changes, so maps don't jump while someone pans.
+    _mapFocus(id) {
+      const NEAR_M = 5000;
+      const near = (a, b, m) => window.GeoUtils.calculateHaversineDistance(a[0], a[1], b[0], b[1]) <= m;
+      const v = this.state.vehicles[0];
+      const truck = v && v.lat != null ? [v.lat, v.lon] : null;
+
+      if (id === 'resident-map-container' || id === 'split-map-container') {
+        const h = this._selectedHouse();
+        if (h) {
+          const home = [h.lat, h.lon];
+          const withTruck = !!truck && near(home, truck, NEAR_M);
+          return { points: withTruck ? [home, truck] : [home], key: `home:${h.id}:${h.lat},${h.lon}:${withTruck}` };
+        }
+      }
+      if (id === 'driver-map-container' && truck) {
+        const stops = this.state.pickupRequests
+          .filter(r => (r.status === 'Pending' || r.status === 'Accepted') && near(truck, [r.lat, r.lon], NEAR_M))
+          .map(r => [r.lat, r.lon]);
+        return { points: [truck, ...stops], key: `truck:${v.id}:${stops.length}` };
+      }
+
+      // Fleet view and fallbacks: households, plus trucks working near them
+      const homes = this._mapHouses().map(h => [h.lat, h.lon]);
+      const trucks = this.state.vehicles.filter(x => x.lat != null).map(x => [x.lat, x.lon])
+        .filter(p => !homes.length || homes.some(hm => near(hm, p, 20000)));
+      if (homes.length || trucks.length) {
+        return { points: [...homes, ...trucks], key: `fleet:${homes.length}:${trucks.length}` };
+      }
+      return { points: this.state.simulation.route.map(w => [w.lat, w.lon]), key: 'route' };
+    }
+
     _initMaps() {
       const ids = ['resident-map-container', 'driver-map-container', 'admin-map-container', 'split-map-container'];
       const fullRoute = this._roadLine(this.state.simulation.route.length - 1);
@@ -1280,7 +1318,8 @@
         const el = byId(id);
         if (!el || this.maps[id] || !this.views.includes(el.closest('.view').id.replace('-view', ''))) continue;
         try {
-          const inst = window.MapManager.createMap(id, { lat: 12.938, lon: 77.627 }, 15);
+          const [lat, lon] = this._mapFocus(id).points[0];
+          const inst = window.MapManager.createMap(id, { lat, lon }, 15);
           inst.drawRoute(fullRoute);
           this.maps[id] = inst;
         } catch (err) {
@@ -1294,9 +1333,7 @@
       if (!Object.keys(this.maps).length) return;
       const vehicle = this.state.vehicles[0];
       const hasPos = vehicle && vehicle.lat != null;
-      const houses = this.role === 'resident'
-        ? this.state.houses.filter(h => h.ownerId === this.profile.id)
-        : this.state.houses;
+      const houses = this._mapHouses();
 
       let opts = null;
       if (hasPos && vehicle.trackingMode === 'live_gps') {
@@ -1336,6 +1373,8 @@
       const house = this._selectedHouse();
       const ownRadius = house ? this._houseRadius(house) : null;
       for (const [id, inst] of Object.entries(this.maps)) {
+        const focus = this._mapFocus(id);
+        inst.setFocus(focus.points, focus.key);
         inst.setZoneRadius(id === 'resident-map-container' || id === 'split-map-container' ? ownRadius : null);
         if (opts) inst.updateVehicle(vehicle, opts);
         else inst.hideVehicle();
