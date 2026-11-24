@@ -18,7 +18,7 @@ const MAP_STYLES = {
 };
 
 const COLORS = { ink: '#111110', accent: '#1F4D3A', accent2: '#2E6B52' };
-const ZONE_RADIUS_M = 500;
+let ZONE_RADIUS_M = 500;   // set from Control › Settings via MapManager.setZoneRadius
 
 const toLngLat = ([lat, lon]) => [lon, lat];
 const easeInOut = t => 0.5 - Math.cos(Math.PI * t) / 2;
@@ -96,6 +96,15 @@ class MapInstance {
     this._target = null;
     this._anim   = null;
     this._fitted = false;
+    this.zoneRadiusM = null;   // per-map override (a resident's own alert distance)
+  }
+
+  // null = follow the ward default set through MapManager.setZoneRadius
+  setZoneRadius(meters) {
+    const m = meters == null ? null : Number(meters);
+    if (m === this.zoneRadiusM) return;
+    this.zoneRadiusM = Number.isFinite(m) && m > 0 ? m : null;
+    this._sizeZone();
   }
 
   /* ── Lifecycle: the WebGL map is created the first time its view is visible */
@@ -223,7 +232,7 @@ class MapInstance {
       ring.className = 'zone-ring';
       this.zoneMarker = new maplibregl.Marker({ element: ring, subpixelPositioning: true })
         .setLngLat(toLngLat(this.pos)).addTo(this.map);
-      this.map.on('zoom', () => this._sizeZone());
+      if (!this._zoomBound) { this.map.on('zoom', () => this._sizeZone()); this._zoomBound = true; }
 
       const el = document.createElement('div');
       el.className = 'mk mk-vehicle';
@@ -239,11 +248,11 @@ class MapInstance {
     this._rotate(this.bearing);
   }
 
-  // Ring diameter in pixels for 500 m at the current zoom
+  // Ring diameter in pixels for the alert distance at the current zoom
   _sizeZone() {
     if (!this.zoneMarker || !this.pos) return;
     const c = this.map.project(toLngLat(this.pos));
-    const e = this.map.project(toLngLat(offsetEast(this.pos, ZONE_RADIUS_M)));
+    const e = this.map.project(toLngLat(offsetEast(this.pos, this.zoneRadiusM || ZONE_RADIUS_M)));
     const d = 2 * Math.hypot(e.x - c.x, e.y - c.y);
     const el = this.zoneMarker.getElement();
     el.style.width = el.style.height = `${d}px`;
@@ -282,6 +291,7 @@ class MapInstance {
 
     this._cancelAnim();
     this._target = target;
+    if (opts.follow) this._follow(target);
 
     const path = opts.path;
     const visible = this.map && this._container().clientWidth > 0;
@@ -337,6 +347,24 @@ class MapInstance {
       }
     };
     this._anim = requestAnimationFrame(step);
+  }
+
+  // No vehicle (or no position yet): take the marker and ring off the map
+  hideVehicle() {
+    this._cancelAnim();
+    this._target = null;
+    this.pos = null;
+    this.vehicle = null;
+    if (this.vehicleMarker) { this.vehicleMarker.remove(); this.vehicleMarker = null; }
+    if (this.zoneMarker) { this.zoneMarker.remove(); this.zoneMarker = null; }
+    this._setTrail([]);
+  }
+
+  // Live GPS can be anywhere: pan when the truck leaves the visible area
+  _follow(target) {
+    if (!this.map || this._container().clientWidth === 0) return;
+    const bounds = this.map.getBounds();
+    if (!bounds.contains(toLngLat(target))) this.map.easeTo({ center: toLngLat(target), duration: 800 });
   }
 
   _cancelAnim() {
@@ -420,6 +448,13 @@ class MapInstance {
 window.MapManager = {
   _instances: {},
   ready: true,
+
+  setZoneRadius(meters) {
+    const m = Number(meters);
+    if (!Number.isFinite(m) || m <= 0 || m === ZONE_RADIUS_M) return;
+    ZONE_RADIUS_M = m;
+    Object.values(this._instances).forEach(inst => inst._sizeZone());
+  },
 
   createMap(containerId, center = {}, zoom = 15) {
     if (this._instances[containerId]) return this._instances[containerId];
