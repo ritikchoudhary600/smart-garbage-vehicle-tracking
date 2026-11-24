@@ -1,12 +1,20 @@
 {
   "name": "smart-garbage-vehicle-tracking",
-  "version": "1.0.0",
+  "version": "2.0.0",
   "description": "Smart Garbage Vehicle Tracking & Automated Waste Collection Management System",
   "main": "server/server.js",
   "scripts": {
     "start": "node server/server.js",
     "dev": "node server/server.js",
-    "test": "node test/runTests.js"
+    "build": "node scripts/build-config.js",
+    "test": "node test/runTests.js",
+    "test:supabase": "node test/supabaseRls.test.js",
+    "db:start": "npx supabase start",
+    "db:reset": "npx supabase db reset",
+    "db:stop": "npx supabase stop"
+  },
+  "engines": {
+    "node": ">=18"
   },
   "keywords": [
     "smart-city",
@@ -14,7 +22,7 @@
     "geofencing",
     "noise-reduction",
     "waste-management",
-    "leaflet",
+    "supabase",
     "gps"
   ],
   "author": "Smart City Project",
