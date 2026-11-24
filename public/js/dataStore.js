@@ -16,58 +16,70 @@
   } = window.GeoUtils;
 
   /* ─── Simulation Route Waypoints (Ward 4, Bangalore) ─────────────────── */
-  const SIMULATION_ROUTE = [
-    { lat: 12.9310, lon: 77.6210, label: 'Depot Start' },
-    { lat: 12.9325, lon: 77.6220, label: 'Route Segment 1' },
-    { lat: 12.9338, lon: 77.6228, label: 'Route Segment 2' },
-    { lat: 12.9350, lon: 77.6237, label: 'South Gate' },
-    { lat: 12.9362, lon: 77.6248, label: 'Route Segment 4' },
-    { lat: 12.9372, lon: 77.6258, label: 'Palm Avenue Start' },
-    { lat: 12.9381, lon: 77.6265, label: 'Palm Avenue' },
-    { lat: 12.9390, lon: 77.6272, label: 'Route Segment 7' },
-    { lat: 12.9395, lon: 77.6278, label: '~500m from House 125' },
-    { lat: 12.9401, lon: 77.6283, label: 'Approaching House 125' },
-    { lat: 12.9408, lon: 77.6288, label: 'Near House 125' },
-    { lat: 12.9415, lon: 77.6292, label: 'Green Glen Sector' },
-    { lat: 12.9422, lon: 77.6300, label: 'Sunshine Crossway Approach' },
-    { lat: 12.9430, lon: 77.6320, label: 'Sunshine Crossway' },
+  // Waypoints come from routeData.js (snapped to real roads). Waypoints 0–7 sit
+  // at exactly the labelled distances from House 125, so the quick-jump chips
+  // match what the resident view shows; each carries the road path that leads to it.
+  const WAYPOINT_LABELS = [
+    'Route start · 1.3 km from House 125',
+    'South Gate approach · 1.1 km',
+    'Entering Palm Avenue · 900 m',
+    'Passing House 88 · 720 m',
+    'Palm Crossway · 580 m',
+    'Entering 500 m geofence · 480 m',
+    'Passing House 102 · 320 m',
+    'Approaching House 125 · 150 m',
+    'Arrived at House 125',
+    'Heading towards House 144',
+    'Arrived at House 144',
+    'East Sector loop',
+    'Returning along East Sector',
+    'Completing loop',
   ];
+  const SIMULATION_ROUTE = window.ROUTE_DATA.waypoints.map(([lat, lon], i) => ({
+    lat, lon,
+    label: WAYPOINT_LABELS[i] || `Waypoint ${i + 1}`,
+    path: window.ROUTE_DATA.paths[i] || null,
+  }));
+  const [H88_LAT, H88_LON]   = window.ROUTE_DATA.houses.h88;
+  const [H102_LAT, H102_LON] = window.ROUTE_DATA.houses.h102;
+
+  const GEOFENCE_ENTER_M = 500;
+  const GEOFENCE_EXIT_M  = 550;
+  const BASE_ANNOUNCEMENTS_AVOIDED = 138;
+  const DB_HOURS_PER_ANNOUNCEMENT  = 0.5;
 
   /* ─── Initial Houses ──────────────────────────────────────────────────── */
+  function makeHouse(h) {
+    return {
+      garbageReady: false, isInGeofence: false,
+      distanceToVehicle: null, bearing: null, direction: null, eta: null,
+      notifiedAt: null,
+      ...h,
+    };
+  }
+
   function makeInitialHouses() {
     return [
-      {
-        id: 'H001', houseNo: '125', residentName: 'Arjun Sharma',
-        ward: 'Ward 4', address: 'House 125, Green Glen Residential Sector, Ward 4',
-        lat: 12.94180, lon: 77.62950,
-        garbageReady: false, isInGeofence: false,
-        distanceToVehicle: null, bearing: null, direction: null, eta: null,
-        notifiedAt: null, phone: '+91-9876543210',
-      },
-      {
-        id: 'H002', houseNo: '102', residentName: 'Priya Reddy',
-        ward: 'Ward 4', address: 'House 102, Palm Avenue, Ward 4',
-        lat: 12.93820, lon: 77.62680,
-        garbageReady: false, isInGeofence: false,
-        distanceToVehicle: null, bearing: null, direction: null, eta: null,
-        notifiedAt: null, phone: '+91-9876543211',
-      },
-      {
-        id: 'H003', houseNo: '144', residentName: 'Mohammed Farooq',
-        ward: 'Ward 4', address: 'House 144, Sunshine Crossway, Ward 4',
-        lat: 12.94320, lon: 77.63150,
-        garbageReady: true, isInGeofence: false,
-        distanceToVehicle: null, bearing: null, direction: null, eta: null,
-        notifiedAt: null, phone: '+91-9876543212',
-      },
-      {
-        id: 'H004', houseNo: '88', residentName: 'Lakshmi Iyer',
-        ward: 'Ward 4', address: 'House 88, South Gate Layout, Ward 4',
-        lat: 12.93520, lon: 77.62420,
-        garbageReady: false, isInGeofence: false,
-        distanceToVehicle: null, bearing: null, direction: null, eta: null,
-        notifiedAt: null, phone: '+91-9876543213',
-      },
+      makeHouse({
+        id: 'H125', houseNo: '125', residentName: 'Priya Sharma', ward: 'Ward 4',
+        address: 'House No. 125, 3rd Cross, Green Glen Sector', landmark: 'Opposite Palm Park',
+        lat: 12.94180, lon: 77.62950, phone: '+91 98112 34567',
+      }),
+      makeHouse({
+        id: 'H102', houseNo: '102', residentName: 'Anand Verma', ward: 'Ward 4',
+        address: 'House No. 102, 2nd Cross, Green Glen Sector', landmark: 'Near Community Water Kiosk',
+        lat: H102_LAT, lon: H102_LON, phone: '+91 98223 45678', garbageReady: true,
+      }),
+      makeHouse({
+        id: 'H144', houseNo: '144', residentName: 'Sneha Patel', ward: 'Ward 4',
+        address: 'House No. 144, 4th Cross, Sunshine Crossway', landmark: 'Beside Lotus Bakery',
+        lat: 12.94310, lon: 77.63120, phone: '+91 98334 56789',
+      }),
+      makeHouse({
+        id: 'H088', houseNo: '88', residentName: 'Karthik Menon', ward: 'Ward 4',
+        address: 'House No. 88, 1st Cross, Palm Avenue', landmark: 'Opposite Green Nursery',
+        lat: H88_LAT, lon: H88_LON, phone: '+91 98445 67890',
+      }),
     ];
   }
 
@@ -76,11 +88,12 @@
     constructor() {
       this.vehicles = [
         {
-          id: 'GV-04', driverName: 'Ramesh Kumar', driverPhone: '+91-9876500001',
-          plateNumber: 'KA-01-GC-4521', capacity: '2 tonnes',
+          id: 'GV-04', driverName: 'Ramesh Kumar', driverPhone: '+91 98765 43210',
+          plateNumber: 'KA-05-GV-2024', capacity: '2 tonnes',
           lat: SIMULATION_ROUTE[0].lat, lon: SIMULATION_ROUTE[0].lon,
-          speed: 0, bearing: 0, direction: { code: 'N', name: 'North', arrow: '↑', label: 'North ↑' },
-          locality: 'Municipal Central Depot', status: 'active',
+          speed: 0, bearing: 45, direction: getBearingOctant(45),
+          locality: detectLocality(SIMULATION_ROUTE[0].lat, SIMULATION_ROUTE[0].lon),
+          status: 'active',
           lastUpdated: new Date().toISOString(),
           trail: [],
         },
@@ -90,37 +103,52 @@
 
       this.pickupRequests = [
         {
-          id: 'PR001', houseNo: '77', residentName: 'Deepa Nair',
-          ward: 'Ward 4', address: 'House 77, Rose Garden Layout, Ward 4',
-          landmark: 'Near blue water tank', note: 'Bulky waste — old furniture',
-          wasteType: 'Bulky Waste', status: 'Pending',
-          lat: 12.9400, lon: 77.6305,
-          createdAt: new Date(Date.now() - 25 * 60000).toISOString(),
-          updatedAt: new Date(Date.now() - 25 * 60000).toISOString(),
+          id: 'REQ-125', houseNo: '125', residentName: 'Priya Sharma', ward: 'Ward 4',
+          address: 'House No. 125, 3rd Cross, Green Glen Sector',
+          landmark: 'Black iron gate, left porch',
+          note: 'Not at home today. Please collect the 2 segregated bags placed beside the gate.',
+          wasteType: 'Segregated (Wet & Dry)', status: 'Pending',
+          lat: 12.94180, lon: 77.62950, distanceToVehicle: null,
+          createdAt: new Date(Date.now() - 35 * 60000).toISOString(),
+          acceptedAt: null, collectedAt: null, missedAt: null,
+          updatedAt: new Date(Date.now() - 35 * 60000).toISOString(),
           assignedDriver: null,
         },
         {
-          id: 'PR002', houseNo: '33', residentName: 'Suresh Babu',
-          ward: 'Ward 4', address: 'House 33, Palm View Colony, Ward 4',
-          landmark: 'Opposite primary school', note: 'Bio-medical waste — handle with care',
-          wasteType: 'Hazardous', status: 'Accepted',
-          lat: 12.9370, lon: 77.6260,
+          id: 'REQ-088', houseNo: '88', residentName: 'Karthik Menon', ward: 'Ward 4',
+          address: 'House No. 88, 1st Cross, Palm Avenue',
+          landmark: 'Near front garage door',
+          note: 'Away on business trip. Box of cardboard packaging kept outside.',
+          wasteType: 'Dry Recyclables', status: 'Accepted',
+          lat: H88_LAT, lon: H88_LON, distanceToVehicle: null,
           createdAt: new Date(Date.now() - 55 * 60000).toISOString(),
+          acceptedAt: new Date(Date.now() - 10 * 60000).toISOString(),
+          collectedAt: null, missedAt: null,
           updatedAt: new Date(Date.now() - 10 * 60000).toISOString(),
           assignedDriver: 'Ramesh Kumar',
         },
       ];
 
-      this.notifications = [];
+      this.notifications = [
+        {
+          id: 'NOTIF-INIT-1', houseNo: 'ALL', type: 'system_info',
+          title: 'Route Commenced',
+          message: 'Garbage collection vehicle GV-04 has started its morning route in Ward 4.',
+          timestamp: new Date(Date.now() - 40 * 60000).toISOString(),
+        },
+      ];
       this.emergencyReports = [];
 
       this.analytics = {
-        collectionsToday: 12,
-        pendingPickups: 2,
-        missedPickups: 1,
-        noiseReductionEvents: 0,
-        activeVehicles: 1,
-        geofenceAlertsFired: 0,
+        announcementsAvoided: BASE_ANNOUNCEMENTS_AVOIDED,
+        decibelHoursSaved:    BASE_ANNOUNCEMENTS_AVOIDED * DB_HOURS_PER_ANNOUNCEMENT,
+        geofenceAlertsFired:  0,
+        collectionsToday:     19,
+        missedPickups:        1,
+        collectionEfficiencyPct: 0,
+        pendingPickups:       0,
+        delayNotices:         0,
+        activeVehicles:       1,
       };
 
       this.simulation = {
@@ -130,7 +158,7 @@
         route: SIMULATION_ROUTE,
       };
 
-      this.requestCounter = 3;
+      this._recalcAnalytics();
       this.recalculateDistances();
     }
 
@@ -139,7 +167,30 @@
       window.dispatchEvent(new CustomEvent(eventType, { detail: payload }));
     }
 
-    /* ── Recalculate distances/bearings for all houses ──────────────────── */
+    /* ── Append to the notification history (houseNo 'ALL' = every resident) */
+    _notify(houseNo, type, title, message, extra = {}) {
+      const notif = {
+        id: `NOTIF-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+        houseNo: String(houseNo), type, title, message,
+        timestamp: new Date().toISOString(),
+        ...extra,
+      };
+      this.notifications.unshift(notif);
+      if (this.notifications.length > 100) this.notifications.pop();
+      return notif;
+    }
+
+    _recalcAnalytics() {
+      const a = this.analytics;
+      const attempted = a.collectionsToday + a.missedPickups;
+      a.collectionEfficiencyPct = attempted > 0
+        ? Math.round((a.collectionsToday / attempted) * 1000) / 10
+        : 100;
+      a.decibelHoursSaved = Math.round(a.announcementsAvoided * DB_HOURS_PER_ANNOUNCEMENT * 10) / 10;
+      a.pendingPickups = this.pickupRequests.filter(r => r.status === 'Pending' || r.status === 'Accepted').length;
+    }
+
+    /* ── Recalculate distances/bearings for all houses & pickups ────────── */
     recalculateDistances() {
       const vehicle = this.vehicles[0];
       if (!vehicle) return;
@@ -147,40 +198,36 @@
       for (const house of this.houses) {
         const dist = calculateHaversineDistance(vehicle.lat, vehicle.lon, house.lat, house.lon);
         const bear = calculateBearing(vehicle.lat, vehicle.lon, house.lat, house.lon);
-        const dir  = getBearingOctant(bear);
-        const eta  = calculateETA(dist, vehicle.speed || 20);
 
         house.distanceToVehicle = dist;
         house.bearing           = Math.round(bear);
-        house.direction         = dir;
-        house.eta               = eta;
+        house.direction         = getBearingOctant(bear);
+        house.eta               = calculateETA(dist, vehicle.speed || 20);
 
         /* Geofence hysteresis: enter ≤500m, exit >550m */
-        const ENTER_RADIUS = 500;
-        const EXIT_RADIUS  = 550;
-        const wasInside    = house.isInGeofence;
-
-        if (!wasInside && dist <= ENTER_RADIUS) {
+        if (!house.isInGeofence && dist <= GEOFENCE_ENTER_M) {
           house.isInGeofence = true;
           house.notifiedAt   = new Date().toISOString();
           this.analytics.geofenceAlertsFired++;
-          this.analytics.noiseReductionEvents++;
-          const notif = {
-            id: `NOTIF-${Date.now()}-${house.houseNo}`,
-            type: 'geofence_alert',
-            houseNo: house.houseNo,
-            residentName: house.residentName,
-            message: `🚛 Garbage vehicle is ~${Math.round(dist)} m away from House #${house.houseNo}. Please keep your garbage ready!`,
-            distance: Math.round(dist),
-            direction: dir,
-            timestamp: new Date().toISOString(),
-          };
-          this.notifications.unshift(notif);
+          this.analytics.announcementsAvoided++;
+          this._recalcAnalytics();
+          const notif = this._notify(house.houseNo, 'geofence_alert', 'Garbage Vehicle Approaching (500m)',
+            `Garbage collection vehicle is approximately ${Math.round(dist)} m away. Please keep your garbage ready.`,
+            { residentName: house.residentName, distance: Math.round(dist), direction: vehicle.direction });
           this.broadcast('geofence_alert', notif);
-        } else if (wasInside && dist > EXIT_RADIUS) {
+        } else if (house.isInGeofence && dist > GEOFENCE_EXIT_M) {
           house.isInGeofence = false;
         }
       }
+
+      for (const req of this.pickupRequests) {
+        req.distanceToVehicle = calculateHaversineDistance(vehicle.lat, vehicle.lon, req.lat, req.lon);
+      }
+    }
+
+    /* ── Clear geofence latches so a fresh demo run re-triggers alerts ──── */
+    resetGeofences() {
+      for (const house of this.houses) house.isInGeofence = false;
     }
 
     /* ── Update vehicle GPS location ─────────────────────────────────────── */
@@ -192,8 +239,6 @@
       const bearing = (prevLat !== lat || prevLon !== lon)
         ? calculateBearing(prevLat, prevLon, lat, lon)
         : vehicle.bearing;
-      const direction = getBearingOctant(bearing);
-      const locality  = detectLocality(lat, lon);
 
       /* Maintain breadcrumb trail (max 50 points) */
       vehicle.trail.push({ lat: prevLat, lon: prevLon });
@@ -203,8 +248,8 @@
       vehicle.lon         = lon;
       vehicle.speed       = speedKmh;
       vehicle.bearing     = Math.round(bearing);
-      vehicle.direction   = direction;
-      vehicle.locality    = locality;
+      vehicle.direction   = getBearingOctant(bearing);
+      vehicle.locality    = detectLocality(lat, lon);
       vehicle.lastUpdated = new Date().toISOString();
 
       this.recalculateDistances();
@@ -218,51 +263,119 @@
       return vehicle;
     }
 
+    /* ── Resident: register a new household or update an existing one ──── */
+    registerHouse(data) {
+      const houseNo = String(data.houseNo || '').trim();
+      if (!houseNo) throw new Error('House number is required');
+
+      let house = this.houses.find(h => h.houseNo === houseNo);
+      const isNew = !house;
+      const lat = Number(data.lat), lon = Number(data.lon);
+
+      if (isNew) {
+        house = makeHouse({
+          id: `H${houseNo.replace(/[^A-Za-z0-9]/g, '')}-${Date.now().toString().slice(-4)}`,
+          houseNo,
+          residentName: data.residentName || `Resident of #${houseNo}`,
+          ward:     data.ward || 'Ward 4',
+          address:  data.address || `House No. ${houseNo}, Ward 4`,
+          landmark: data.landmark || '',
+          phone:    data.phone || '',
+          lat: Number.isFinite(lat) && lat ? lat : 12.9415 + (Math.random() - 0.5) * 0.003,
+          lon: Number.isFinite(lon) && lon ? lon : 77.6290 + (Math.random() - 0.5) * 0.003,
+        });
+        this.houses.push(house);
+      } else {
+        for (const k of ['residentName', 'ward', 'address', 'landmark', 'phone']) {
+          if (data[k]) house[k] = data[k];
+        }
+        if (Number.isFinite(lat) && lat) house.lat = lat;
+        if (Number.isFinite(lon) && lon) house.lon = lon;
+      }
+
+      this.recalculateDistances();
+      this._notify(houseNo, 'registration', isNew ? 'Household Registered' : 'Household Profile Updated',
+        `House #${houseNo} (${house.residentName}) registered in ${house.ward}. Quiet 500 m geofence alerts are active.`);
+      this.broadcast('house_registered', { house, isNew, houses: this.houses });
+      return house;
+    }
+
     /* ── Resident: mark garbage ready ────────────────────────────────────── */
     setGarbageReady(houseNo, isReady) {
       const house = this.houses.find(h => h.houseNo === String(houseNo));
       if (!house) return null;
       house.garbageReady = isReady;
-      this.broadcast('garbage_ready_updated', { houseNo, garbageReady: isReady });
+      this._notify(house.houseNo, 'garbage_ready',
+        isReady ? 'Garbage Marked Ready' : 'Garbage Ready Cleared',
+        isReady
+          ? `House #${house.houseNo} told the driver that bins are outside the gate.`
+          : `House #${house.houseNo} cleared the garbage-ready status.`);
+      this.broadcast('garbage_ready_updated', { houseNo: house.houseNo, garbageReady: isReady, house });
       return house;
     }
 
     /* ── Resident: create pickup request ─────────────────────────────────── */
     createPickupRequest(data) {
+      const houseNo = String(data.houseNo || '').trim() || 'N/A';
+      const house   = this.houses.find(h => h.houseNo === houseNo);
+      const now     = new Date().toISOString();
       const req = {
-        id:            `PR${String(this.requestCounter++).padStart(3, '0')}`,
-        houseNo:       data.houseNo || 'N/A',
-        residentName:  data.residentName || 'Resident',
-        ward:          data.ward || 'Ward 4',
-        address:       data.address || `House ${data.houseNo}, Ward 4`,
+        id:            `REQ-${Date.now().toString().slice(-5)}`,
+        houseNo,
+        residentName:  data.residentName || (house ? house.residentName : 'Resident'),
+        ward:          data.ward || (house ? house.ward : 'Ward 4'),
+        address:       data.address || (house ? house.address : `House No. ${houseNo}, Ward 4`),
         landmark:      data.landmark || '',
         note:          data.note || '',
         wasteType:     data.wasteType || 'Mixed Waste',
         status:        'Pending',
-        lat:           data.lat || 12.9415,
-        lon:           data.lon || 77.6290,
-        createdAt:     new Date().toISOString(),
-        updatedAt:     new Date().toISOString(),
+        lat:           house ? house.lat : 12.9415,
+        lon:           house ? house.lon : 77.6290,
+        distanceToVehicle: null,
+        createdAt:     now, acceptedAt: null, collectedAt: null, missedAt: null,
+        updatedAt:     now,
         assignedDriver: null,
       };
       this.pickupRequests.unshift(req);
-      this.analytics.pendingPickups++;
+      this.recalculateDistances();
+      this._recalcAnalytics();
+      this._notify(houseNo, 'pickup_request_created', 'Pickup Request Logged',
+        `Pickup request ${req.id} for House #${houseNo} was sent to Driver ${this.vehicles[0].driverName}.`);
       this.broadcast('pickup_request_created', { request: req, pickupRequests: this.pickupRequests });
       return req;
     }
 
-    /* ── Driver: update pickup request status ────────────────────────────── */
-    updatePickupStatus(requestId, newStatus, driverName = 'Ramesh Kumar') {
+    /* ── Driver: update pickup request status (Accepted / Collected / Missed) */
+    updatePickupStatus(requestId, newStatus, driverName) {
       const req = this.pickupRequests.find(r => r.id === requestId);
       if (!req) return null;
-      const prev = req.status;
-      req.status        = newStatus;
-      req.updatedAt     = new Date().toISOString();
-      req.assignedDriver = driverName;
+      const driver = driverName || this.vehicles[0].driverName;
+      const now    = new Date().toISOString();
 
-      if (newStatus === 'Accepted' && prev === 'Pending') this.analytics.pendingPickups = Math.max(0, this.analytics.pendingPickups - 1);
-      if (newStatus === 'Collected') { this.analytics.collectionsToday++; }
+      req.status         = newStatus;
+      req.updatedAt      = now;
+      req.assignedDriver = driver;
 
+      if (newStatus === 'Accepted') {
+        req.acceptedAt = now;
+        this._notify(req.houseNo, 'pickup_accepted', 'Pickup Request Accepted',
+          `Driver ${driver} accepted pickup ${req.id} for House #${req.houseNo} and is heading to your location.`);
+      } else if (newStatus === 'Collected') {
+        if (!req.acceptedAt) req.acceptedAt = now;
+        req.collectedAt = now;
+        this.analytics.collectionsToday++;
+        const house = this.houses.find(h => h.houseNo === req.houseNo);
+        if (house) house.garbageReady = false;
+        this._notify(req.houseNo, 'pickup_collected', 'Garbage Collected Successfully',
+          `Your garbage has been collected by Driver ${driver}. Thank you for keeping your city clean!`);
+      } else if (newStatus === 'Missed') {
+        req.missedAt = now;
+        this.analytics.missedPickups++;
+        this._notify(req.houseNo, 'pickup_missed', 'Pickup Missed',
+          `Driver ${driver} could not collect from House #${req.houseNo}: bins were inaccessible or the gate was locked.`);
+      }
+
+      this._recalcAnalytics();
       this.broadcast('pickup_status_updated', {
         request:        req,
         pickupRequests: this.pickupRequests,
@@ -271,10 +384,31 @@
       return req;
     }
 
-    /* ── Driver: report emergency ────────────────────────────────────────── */
+    /* ── Driver: switch the driver on duty ───────────────────────────────── */
+    switchDriver(driverName, vehicleId = 'GV-04') {
+      const vehicle = this.vehicles.find(v => v.id === vehicleId);
+      if (!vehicle || !driverName) return null;
+      vehicle.driverName = driverName;
+      this.broadcast('driver_switched', { vehicle });
+      return vehicle;
+    }
+
+    /* ── Driver: report emergency / delay — broadcast to every resident ──── */
     reportEmergency(report) {
-      const entry = { ...report, id: `ER${Date.now()}`, reportedAt: new Date().toISOString(), resolved: false };
+      const vehicle = this.vehicles[0];
+      const entry = {
+        id: `ER-${Date.now().toString().slice(-5)}`,
+        vehicleId:  report.vehicleId || vehicle.id,
+        driverName: vehicle.driverName,
+        type:       report.type || 'Other',
+        message:    report.message || 'Encountered an unexpected delay.',
+        locality:   vehicle.locality,
+        reportedAt: new Date().toISOString(),
+      };
       this.emergencyReports.unshift(entry);
+      this.analytics.delayNotices++;
+      this._notify('ALL', 'emergency_alert', `Driver Alert: ${entry.type}`,
+        `Vehicle ${entry.vehicleId} reported: ${entry.message}`);
       this.broadcast('emergency_reported', { report: entry, emergencyReports: this.emergencyReports });
       return entry;
     }
