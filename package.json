@@ -6,7 +6,6 @@
   "scripts": {
     "start": "node server/server.js",
     "dev": "node server/server.js",
-    "vercel-build": "",
     "test": "node test/runTests.js"
   },
   "keywords": [
