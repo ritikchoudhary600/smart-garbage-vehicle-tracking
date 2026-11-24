@@ -53,19 +53,29 @@
     { name: 'Municipal Central Depot',                lat: 12.9310, lon: 77.6210, radius: 500 },
   ];
 
+  // "28.6139°N, 77.2090°E"
+  function formatCoords(lat, lon) {
+    return `${Math.abs(lat).toFixed(4)}°${lat >= 0 ? 'N' : 'S'}, ${Math.abs(lon).toFixed(4)}°${lon >= 0 ? 'E' : 'W'}`;
+  }
+
+  // Named areas exist only for the demo ward; anywhere else (a real
+  // deployment in another city) show coordinates instead of a wrong name
+  const LOCALITY_REACH_M = 1500;
   function detectLocality(lat, lon) {
-    let closest = MUNICIPAL_LOCALITIES[0].name;
+    if (lat == null || lon == null) return '';
+    let closest = null;
     let minDist = Infinity;
     for (const loc of MUNICIPAL_LOCALITIES) {
       const d = calculateHaversineDistance(lat, lon, loc.lat, loc.lon);
       if (d <= loc.radius && d < minDist) { minDist = d; closest = loc.name; }
     }
-    if (minDist === Infinity) {
-      // fallback: nearest regardless of radius
+    if (!closest) {
+      // Just outside every area: name the nearest one, if it is close by
       for (const loc of MUNICIPAL_LOCALITIES) {
         const d = calculateHaversineDistance(lat, lon, loc.lat, loc.lon);
         if (d < minDist) { minDist = d; closest = loc.name; }
       }
+      if (minDist > LOCALITY_REACH_M) return formatCoords(lat, lon);
     }
     return closest;
   }
@@ -102,6 +112,7 @@
     calculateETA,
     effectiveAlertRadius,
     formatMeters,
+    formatCoords,
     MUNICIPAL_LOCALITIES,
   };
 })();
