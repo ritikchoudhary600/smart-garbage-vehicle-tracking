@@ -22,6 +22,11 @@ coverage/
 # Vercel CLI project link (per machine)
 .vercel/
 
+# Supabase CLI local state (per machine). supabase/.env holds Google OAuth secrets.
+supabase/.temp/
+supabase/.branches/
+supabase/.env
+
 # Release archives
 *.zip
 
