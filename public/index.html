@@ -18,7 +18,95 @@
 
   <link rel="stylesheet" href="/css/styles.css">
 </head>
-<body>
+<body class="is-gated">
+
+  <!-- ══ Sign-in gate ════════════════════════════════════════════════════ -->
+  <div class="gate" id="auth-gate" data-state="loading">
+    <div class="gate-main">
+      <div class="gate-brand">
+        <span class="brand-mark" aria-hidden="true">
+          <svg viewBox="0 0 32 32">
+            <circle class="bm-ring" cx="16" cy="16" r="9.5" pathLength="48" />
+            <circle class="bm-dot" cx="16" cy="16" r="3.4" />
+          </svg>
+        </span>
+        <span class="brand-name">Smart Garbage <em>Tracking</em></span>
+      </div>
+
+      <!-- Loading -->
+      <div class="gate-pane" data-pane="loading" aria-live="polite">
+        <span class="spinner" aria-hidden="true"></span>
+        <p class="gate-lede">Opening your account…</p>
+      </div>
+
+      <!-- Sign in -->
+      <div class="gate-pane" data-pane="signin">
+        <div class="eyebrow">Quiet waste collection</div>
+        <h1 class="gate-title">No loudspeakers.<br><em>One quiet alert at 500&nbsp;m.</em></h1>
+        <p class="gate-lede">Sign in to see where the collection truck is, request a pickup when you're away, or run your route.</p>
+
+        <button class="google-btn" id="btn-google-signin" type="button">
+          <svg class="g-logo" viewBox="0 0 48 48" aria-hidden="true">
+            <path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"/>
+            <path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"/>
+            <path fill="#FBBC05" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z"/>
+            <path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.15 1.45-4.92 2.3-8.16 2.3-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"/>
+          </svg>
+          <span>Sign in with Google</span>
+        </button>
+
+        <p class="gate-error" id="gate-error" role="alert" hidden></p>
+
+        <div class="gate-demo">
+          <div class="gate-or"><span>or</span></div>
+          <button class="btn btn-quiet gate-demo-btn" id="btn-demo" type="button">Explore the offline demo</button>
+          <p class="gate-note">Supabase isn't connected yet, so the demo keeps everything in this browser tab.</p>
+        </div>
+
+        <ul class="gate-roles">
+          <li><strong>Residents</strong> get a quiet alert and request pickups</li>
+          <li><strong>Drivers</strong> share GPS and work the pickup queue</li>
+          <li><strong>Municipal staff</strong> manage people, fleet and settings</li>
+        </ul>
+      </div>
+
+      <!-- Waiting for approval -->
+      <div class="gate-pane" data-pane="pending">
+        <div class="eyebrow">Almost there</div>
+        <h1 class="gate-title">Waiting for <em>approval</em></h1>
+        <p class="gate-lede">You're signed in as <strong class="val-gate-email"></strong>. A municipal admin needs to approve your account before you can see collection data.</p>
+        <div class="gate-actions">
+          <button class="btn btn-primary" id="btn-gate-recheck" type="button">Check again</button>
+          <button class="btn btn-quiet btn-gate-signout" type="button">Sign out</button>
+        </div>
+      </div>
+
+      <!-- Suspended -->
+      <div class="gate-pane" data-pane="suspended">
+        <div class="eyebrow">Access paused</div>
+        <h1 class="gate-title">Your access is <em>paused</em></h1>
+        <p class="gate-lede"><strong class="val-gate-email"></strong> has been suspended by a municipal admin. Contact your ward office if you think this is a mistake.</p>
+        <div class="gate-actions">
+          <button class="btn btn-quiet btn-gate-signout" type="button">Sign out</button>
+        </div>
+      </div>
+    </div>
+
+    <aside class="gate-side" aria-hidden="true">
+      <div class="gate-orbit">
+        <span class="gate-ring gate-ring-1"></span>
+        <span class="gate-ring gate-ring-2"></span>
+        <span class="gate-truck"></span>
+        <span class="gate-home gate-home-1"></span>
+        <span class="gate-home gate-home-2"></span>
+        <span class="gate-home gate-home-3"></span>
+      </div>
+      <div class="gate-figures">
+        <div><span class="gate-fig">85 dB</span><span class="gate-fig-label">loudspeaker every 50 m</span></div>
+        <div><span class="gate-fig gate-fig-quiet">25 dB</span><span class="gate-fig-label">one chime at 500 m</span></div>
+      </div>
+    </aside>
+  </div>
 
   <!-- ══ Top bar ═════════════════════════════════════════════════════════ -->
   <header class="topbar">
@@ -33,7 +121,7 @@
         </span>
         <span class="brand-text">
           <span class="brand-name">Smart Garbage <em>Tracking</em></span>
-          <span class="brand-sub">Quiet waste collection · Ward 4</span>
+          <span class="brand-sub">Quiet waste collection · <span class="val-ward-name">Ward 4</span></span>
         </span>
       </a>
 
@@ -42,6 +130,7 @@
         <button class="seg role-tab" data-role="driver">Driver</button>
         <button class="seg role-tab" data-role="admin">Municipal</button>
         <button class="seg role-tab" data-role="split">Split demo</button>
+        <button class="seg role-tab" data-role="control">Control</button>
       </nav>
 
       <div class="topbar-actions">
@@ -54,6 +143,28 @@
           <svg class="ico-on" viewBox="0 0 24 24"><path d="M6 16V11a6 6 0 1 1 12 0v5l1.5 2h-15z"/><path d="M10 20.5a2 2 0 0 0 4 0"/></svg>
           <svg class="ico-off" viewBox="0 0 24 24"><path d="M6 16V11a6 6 0 0 1 9.3-5"/><path d="M18 11v5l1.5 2H8"/><path d="M10 20.5a2 2 0 0 0 4 0"/><path d="M4 4l16 16"/></svg>
         </button>
+
+        <div class="user-menu">
+          <button class="user-btn" id="btn-user-menu" aria-haspopup="menu" aria-expanded="false" aria-controls="user-menu" title="Account">
+            <span class="avatar" id="user-avatar" aria-hidden="true"></span>
+            <span class="sr-only">Account menu</span>
+          </button>
+          <div class="menu" id="user-menu" role="menu" hidden>
+            <div class="menu-head">
+              <div class="menu-name" id="user-name"></div>
+              <div class="menu-email" id="user-email"></div>
+              <span class="role-badge" id="user-role"></span>
+            </div>
+            <button class="menu-item" role="menuitem" id="btn-open-permissions" type="button">
+              <svg viewBox="0 0 24 24"><path d="M12 3l7 3v5c0 4.5-3 8.5-7 10-4-1.5-7-5.5-7-10V6z"/><path d="M9 12l2 2 4-4"/></svg>
+              Device permissions
+            </button>
+            <button class="menu-item" role="menuitem" id="btn-sign-out" type="button">
+              <svg viewBox="0 0 24 24"><path d="M15 4h3a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2h-3"/><path d="M10 17l-5-5 5-5"/><path d="M5 12h11"/></svg>
+              <span id="sign-out-label">Sign out</span>
+            </button>
+          </div>
+        </div>
       </div>
     </div>
   </header>
@@ -64,16 +175,23 @@
     <section class="view active" id="resident-view">
       <div class="workspace">
         <aside class="panel">
-          <div class="res-head">
+          <div class="notice notice-cta needs-no-house">
+            <div class="eyebrow">Welcome</div>
+            <h1 class="res-name">Register your <em>household</em></h1>
+            <p>Add your house so the collection truck can alert you quietly at <span class="val-radius">500 m</span>, instead of with a loudspeaker.</p>
+            <button class="btn btn-primary btn-open-register" type="button">Register household</button>
+          </div>
+
+          <div class="res-head needs-house">
             <div class="res-identity">
               <div class="eyebrow">Household <span class="val-res-house">#125</span></div>
               <h1 class="res-name val-res-name">Priya Sharma</h1>
               <p class="res-address val-res-address">House No. 125, 3rd Cross, Green Glen Sector</p>
             </div>
           </div>
-          <div class="account-row">
+          <div class="account-row needs-house">
             <select class="select" id="resident-account-select" aria-label="Switch household"></select>
-            <button class="btn btn-quiet btn-sm" id="btn-open-register-modal">Register</button>
+            <button class="btn btn-quiet btn-sm btn-open-register" id="btn-open-register-modal">Register</button>
           </div>
 
           <div class="alert geofence-alert-box" role="status">
@@ -84,29 +202,46 @@
             </div>
           </div>
 
-          <div class="hero">
-            <div class="eyebrow"><span class="live-dot" aria-hidden="true"></span> Vehicle GV-04 · live</div>
+          <div class="hero needs-house">
+            <div class="eyebrow"><span class="live-dot" aria-hidden="true"></span> Vehicle <span class="val-vehicle-id">GV-04</span> · live</div>
             <div class="hero-value"><span class="val-res-distance-num">1.30</span><span class="hero-unit val-res-distance-unit">km</span></div>
             <p class="hero-sub">from your gate</p>
             <div class="track">
               <div class="track-fill distance-progress"></div>
-              <span class="track-mark" style="left: 64.3%;" title="500 m geofence"></span>
+              <span class="track-mark geofence-mark" style="left: 64.3%;" title="Geofence"></span>
             </div>
-            <div class="track-labels"><span>1.4 km</span><span class="track-labels-mid">500 m zone</span><span>Gate</span></div>
+            <div class="track-labels"><span class="val-track-max">1.4 km</span><span class="track-labels-mid"><span class="val-house-radius">500 m</span> alert</span><span>Gate</span></div>
           </div>
 
-          <dl class="stats">
+          <dl class="stats needs-house">
             <div><dt>Heading</dt><dd class="val-res-direction">Northeast ↗</dd></div>
             <div><dt>Arrival</dt><dd class="val-res-eta">~3 min</dd></div>
             <div class="stats-wide"><dt>Locality</dt><dd class="val-res-locality">Ward 4</dd></div>
           </dl>
 
-          <div class="actions">
+          <div class="actions needs-house">
             <button class="btn btn-ready btn-garbage-ready"><span class="btn-dot" aria-hidden="true"></span><span class="btn-label">Mark garbage ready</span></button>
             <button class="btn btn-outline btn-open-pickup-modal">Request pickup</button>
           </div>
 
-          <section class="block">
+          <section class="block alert-range needs-house" aria-labelledby="alert-range-title">
+            <h2 class="block-title" id="alert-range-title">Alert me at <span class="block-note" id="alert-range-source">Ward default</span></h2>
+            <div class="range-row">
+              <input type="range" class="range" id="alert-range-input" min="100" max="2000" step="50" value="500"
+                     aria-describedby="alert-range-hint" aria-label="Alert distance">
+              <output class="range-value" id="alert-range-value" for="alert-range-input">500 m</output>
+            </div>
+            <div class="range-presets" role="group" aria-label="Quick choices">
+              <button type="button" class="chip-light" data-radius="200">200 m</button>
+              <button type="button" class="chip-light" data-radius="500">500 m</button>
+              <button type="button" class="chip-light" data-radius="1000">1 km</button>
+              <button type="button" class="chip-light" data-radius="1500">1.5 km</button>
+            </div>
+            <p class="range-hint" id="alert-range-hint">One quiet alert when the truck is 500 m away.</p>
+            <button type="button" class="btn-link" id="alert-range-reset" hidden>Use the ward default</button>
+          </section>
+
+          <section class="block needs-house">
             <h2 class="block-title">Pickup requests</h2>
             <div class="resident-pickup-tracker-wrapper"></div>
           </section>
@@ -121,8 +256,8 @@
           <div class="map" id="resident-map-container"></div>
           <div class="map-legend">
             <span><i class="lg lg-vehicle"></i>Vehicle</span>
-            <span><i class="lg lg-zone"></i>500 m zone</span>
-            <span><i class="lg lg-home"></i><span class="val-res-house">#125</span></span>
+            <span><i class="lg lg-zone"></i><span class="val-house-radius">500 m</span> alert</span>
+            <span class="needs-house"><i class="lg lg-home"></i><span class="val-res-house">#125</span></span>
             <span><i class="lg lg-pickup"></i>Pickup</span>
           </div>
         </div>
@@ -141,15 +276,27 @@
         </div>
 
         <aside class="panel">
-          <div class="eyebrow">Vehicle GV-04 · KA-05-GV-2024</div>
+          <div class="eyebrow">Vehicle <span class="val-vehicle-id">GV-04</span> · <span id="drv-plate">KA-05-GV-2024</span></div>
           <h1 class="res-name" id="drv-display-name">Ramesh Kumar</h1>
           <div class="account-row">
-            <select class="select" id="driver-profile-select" aria-label="Driver on duty">
-              <option value="Ramesh Kumar">Ramesh Kumar</option>
-              <option value="Sunita Rao">Sunita Rao</option>
-              <option value="Rajesh Singh">Rajesh Singh</option>
-            </select>
+            <select class="select" id="driver-profile-select" aria-label="Driver on duty"></select>
             <button class="btn btn-danger-quiet btn-sm" id="btn-open-emergency-modal">Report issue</button>
+          </div>
+
+          <div class="notice" id="drv-no-vehicle" hidden>
+            <strong>No vehicle assigned to you yet.</strong>
+            Ask a municipal admin to assign one in Control › Fleet. You can still see the pickup queue.
+          </div>
+
+          <div class="gps-card" id="gps-card">
+            <div class="gps-main">
+              <span class="gps-dot" aria-hidden="true"></span>
+              <div>
+                <div class="gps-title">Live GPS</div>
+                <div class="gps-sub" id="gps-status">Off. The route simulator is driving the truck.</div>
+              </div>
+            </div>
+            <button class="btn btn-outline btn-sm" id="btn-live-gps" type="button">Share live location</button>
           </div>
 
           <div class="route-progress">
@@ -158,7 +305,7 @@
               <span class="mono" id="drv-route-pct">0%</span>
             </div>
             <div class="track"><div class="track-fill" id="drv-route-progress-bar"></div></div>
-            <div class="route-progress-sub">Ward 4 residential morning circuit</div>
+            <div class="route-progress-sub"><span class="val-ward-name">Ward 4</span> residential morning circuit</div>
           </div>
 
           <dl class="stats">
@@ -186,9 +333,9 @@
         <div class="page-head">
           <div>
             <div class="eyebrow">Municipal dashboard</div>
-            <h1 class="page-title">Ward 4, <em>today</em></h1>
+            <h1 class="page-title"><span class="val-ward-name">Ward 4</span>, <em>today</em></h1>
           </div>
-          <p class="page-lede">Every loudspeaker announcement replaced by a quiet 500&nbsp;m geofenced alert.</p>
+          <p class="page-lede">Every loudspeaker announcement replaced by a quiet <span class="val-radius">500 m</span> geofenced alert.</p>
         </div>
 
         <div class="kpis">
@@ -238,7 +385,7 @@
               <div class="noise-meta"><span>Geofenced chime</span><span class="mono">25 dB</span></div>
               <div class="noise-bar"><span style="width: 25%;"></span></div>
             </div>
-            <p class="noise-copy">Trucks that broadcast every 50 m disturb infants, students, senior citizens and night-shift workers. A single notification at 500 m does the same job silently.</p>
+            <p class="noise-copy">Trucks that broadcast every 50 m disturb infants, students, senior citizens and night-shift workers. A single notification at <span class="val-radius">500 m</span> does the same job silently.</p>
           </div>
         </div>
 
@@ -256,7 +403,7 @@
           <div class="card-head"><h2 class="card-title">Households</h2></div>
           <div class="table-wrap">
             <table class="table">
-              <thead><tr><th>House</th><th>Resident</th><th>Ward</th><th>Distance</th><th>500 m zone</th><th>Bins</th></tr></thead>
+              <thead><tr><th>House</th><th>Resident</th><th>Ward</th><th>Distance</th><th>Geofence</th><th>Bins</th></tr></thead>
               <tbody id="admin-houses-tbody"></tbody>
             </table>
           </div>
@@ -289,7 +436,11 @@
       <div class="workspace">
         <aside class="panel">
           <div class="split-tag">Resident</div>
-          <div class="res-identity">
+          <div class="notice notice-cta needs-no-house">
+            <p>No household to show yet. Register one first.</p>
+            <button class="btn btn-primary btn-sm btn-open-register" type="button">Register household</button>
+          </div>
+          <div class="res-identity needs-house">
             <div class="eyebrow">Household <span class="val-res-house">#125</span></div>
             <h1 class="res-name val-res-name">Priya Sharma</h1>
             <p class="res-address val-res-address"></p>
@@ -303,25 +454,25 @@
             </div>
           </div>
 
-          <div class="hero hero-compact">
+          <div class="hero hero-compact needs-house">
             <div class="hero-value"><span class="val-res-distance-num">1.30</span><span class="hero-unit val-res-distance-unit">km</span></div>
             <div class="track">
               <div class="track-fill distance-progress"></div>
-              <span class="track-mark" style="left: 64.3%;"></span>
+              <span class="track-mark geofence-mark" style="left: 64.3%;"></span>
             </div>
           </div>
 
-          <dl class="stats">
+          <dl class="stats needs-house">
             <div><dt>Heading</dt><dd class="val-res-direction">—</dd></div>
             <div><dt>Arrival</dt><dd class="val-res-eta">—</dd></div>
           </dl>
 
-          <div class="actions">
+          <div class="actions needs-house">
             <button class="btn btn-ready btn-garbage-ready"><span class="btn-dot" aria-hidden="true"></span><span class="btn-label">Mark garbage ready</span></button>
             <button class="btn btn-outline btn-open-pickup-modal">Request pickup</button>
           </div>
 
-          <section class="block">
+          <section class="block needs-house">
             <h2 class="block-title">Pickup requests</h2>
             <div class="resident-pickup-tracker-wrapper"></div>
           </section>
@@ -343,6 +494,194 @@
           <div class="card">
             <div class="card-head"><h2 class="card-title">Driver pickup queue</h2></div>
             <div class="pickup-queue-container queue-scroll"></div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ══ 5. Control management (admins) ════════════════════════════════ -->
+    <section class="view" id="control-view">
+      <div class="page">
+        <div class="page-head">
+          <div>
+            <div class="eyebrow">Control management</div>
+            <h1 class="page-title">Control <em>room</em></h1>
+          </div>
+          <p class="page-lede">Decide who sees what, keep the fleet and household register current, and tune how quiet alerts behave.</p>
+        </div>
+
+        <nav class="subtabs" aria-label="Control sections">
+          <button class="subtab active" data-pane="people" type="button">People <span class="subtab-count" id="ctl-count-people"></span></button>
+          <button class="subtab" data-pane="fleet" type="button">Fleet <span class="subtab-count" id="ctl-count-fleet"></span></button>
+          <button class="subtab" data-pane="households" type="button">Households <span class="subtab-count" id="ctl-count-households"></span></button>
+          <button class="subtab" data-pane="settings" type="button">Settings</button>
+          <button class="subtab" data-pane="audit" type="button">Audit log</button>
+        </nav>
+
+        <!-- People -->
+        <div class="ctl-pane active" data-pane="people">
+          <div class="ctl-banner" id="ctl-pending-banner" hidden>
+            <span class="ctl-banner-dot" aria-hidden="true"></span>
+            <span id="ctl-pending-text"></span>
+            <button class="btn btn-sm btn-accent" id="ctl-show-pending" type="button">Review</button>
+          </div>
+          <div class="card">
+            <div class="card-head card-head-wrap">
+              <h2 class="card-title">People</h2>
+              <div class="toolbar">
+                <input class="input input-sm" type="search" id="ctl-people-search" placeholder="Search name or email" aria-label="Search people">
+                <select class="select select-sm" id="ctl-people-role" aria-label="Filter by role">
+                  <option value="">All roles</option>
+                  <option value="pending">Waiting for approval</option>
+                  <option value="resident">Residents</option>
+                  <option value="driver">Drivers</option>
+                  <option value="admin">Admins</option>
+                </select>
+              </div>
+            </div>
+            <div class="table-wrap">
+              <table class="table table-ctl">
+                <thead><tr><th>Person</th><th>Role</th><th>Access</th><th>Linked to</th><th>Last active</th><th class="th-actions"><span class="sr-only">Actions</span></th></tr></thead>
+                <tbody id="ctl-people-tbody"></tbody>
+              </table>
+            </div>
+            <p class="card-foot" id="ctl-people-foot"></p>
+          </div>
+        </div>
+
+        <!-- Fleet -->
+        <div class="ctl-pane" data-pane="fleet">
+          <div class="card">
+            <div class="card-head">
+              <h2 class="card-title">Vehicles</h2>
+              <button class="btn btn-primary btn-sm" id="ctl-add-vehicle" type="button">Add vehicle</button>
+            </div>
+            <div class="table-wrap">
+              <table class="table table-ctl">
+                <thead><tr><th>Vehicle</th><th>Registration</th><th>Capacity</th><th>Driver</th><th>Status</th><th>Last position</th><th class="th-actions"><span class="sr-only">Actions</span></th></tr></thead>
+                <tbody id="ctl-vehicles-tbody"></tbody>
+              </table>
+            </div>
+            <p class="card-foot">The maps and route simulator follow the first active vehicle; a driver always sees their own.</p>
+          </div>
+        </div>
+
+        <!-- Households -->
+        <div class="ctl-pane" data-pane="households">
+          <div class="card">
+            <div class="card-head card-head-wrap">
+              <h2 class="card-title">Households</h2>
+              <div class="toolbar">
+                <input class="input input-sm" type="search" id="ctl-house-search" placeholder="Search house, name or address" aria-label="Search households">
+                <button class="btn btn-primary btn-sm" id="ctl-add-household" type="button">Add household</button>
+              </div>
+            </div>
+            <div class="table-wrap">
+              <table class="table table-ctl">
+                <thead><tr><th>House</th><th>Resident</th><th>Address</th><th>Linked account</th><th>Alert at</th><th>Bins</th><th class="th-actions"><span class="sr-only">Actions</span></th></tr></thead>
+                <tbody id="ctl-households-tbody"></tbody>
+              </table>
+            </div>
+          </div>
+          <div class="card">
+            <div class="card-head"><h2 class="card-title">Pickup requests</h2></div>
+            <div class="table-wrap">
+              <table class="table table-ctl">
+                <thead><tr><th>Request</th><th>House</th><th>Waste</th><th>Requested</th><th>Status</th><th class="th-actions"><span class="sr-only">Actions</span></th></tr></thead>
+                <tbody id="ctl-pickups-tbody"></tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+
+        <!-- Settings -->
+        <div class="ctl-pane" data-pane="settings">
+          <form class="card settings-form" id="ctl-settings-form" novalidate>
+            <div class="settings-group">
+              <div class="settings-intro">
+                <h2 class="card-title">Ward</h2>
+                <p>Shown across the app and used to decide when "today" starts on the dashboard.</p>
+              </div>
+              <div class="settings-fields field-row">
+                <label class="field"><span>Ward name</span><input class="input" name="wardName" maxlength="60" required></label>
+                <label class="field"><span>Time zone</span><input class="input mono" name="timezone" list="tz-list" required></label>
+              </div>
+            </div>
+            <div class="settings-group">
+              <div class="settings-intro">
+                <h2 class="card-title">Quiet alerts</h2>
+                <p>Each household gets one alert when the truck comes within its alert distance. Residents can choose their own distance inside the range you allow; everyone else uses the default. The alert re-arms once the truck is the buffer beyond it, so GPS jitter never repeats it.</p>
+              </div>
+              <div class="settings-fields">
+                <div class="field-row">
+                  <label class="field"><span>Default alert distance <em>metres</em></span><input class="input mono" name="geofenceRadiusM" type="number" min="50" max="5000" step="10" required></label>
+                  <label class="field"><span>Re-arm buffer <em>metres beyond</em></span><input class="input mono" name="rearmBufferM" type="number" min="10" max="1000" step="10" required></label>
+                </div>
+                <div class="field-row">
+                  <label class="field"><span>Residents can choose from <em>metres</em></span><input class="input mono" name="alertRadiusMinM" type="number" min="50" max="5000" step="10" required></label>
+                  <label class="field"><span>…up to <em>metres</em></span><input class="input mono" name="alertRadiusMaxM" type="number" min="50" max="5000" step="10" required></label>
+                </div>
+              </div>
+            </div>
+            <div class="settings-group">
+              <div class="settings-intro">
+                <h2 class="card-title">New sign-ins</h2>
+                <p>What happens when someone signs in with Google for the first time.</p>
+              </div>
+              <div class="settings-fields">
+                <label class="radio-card"><input type="radio" name="autoApproveResidents" value="true"><span><strong>Join as a resident</strong><em>They can register their own household straight away.</em></span></label>
+                <label class="radio-card"><input type="radio" name="autoApproveResidents" value="false"><span><strong>Wait for approval</strong><em>An admin approves each person under People.</em></span></label>
+              </div>
+            </div>
+            <div class="settings-group">
+              <div class="settings-intro">
+                <h2 class="card-title">Dashboard baselines</h2>
+                <p>Counts from before this system went live, added to what it records.</p>
+              </div>
+              <div class="settings-fields field-row field-row-4">
+                <label class="field"><span>Announcements avoided</span><input class="input mono" name="baselineAnnouncements" type="number" min="0" step="1" required></label>
+                <label class="field"><span>Collections today</span><input class="input mono" name="baselineCollections" type="number" min="0" step="1" required></label>
+                <label class="field"><span>Missed today</span><input class="input mono" name="baselineMissed" type="number" min="0" step="1" required></label>
+                <label class="field"><span>dB·h per announcement</span><input class="input mono" name="dbHoursPerAnnouncement" type="number" min="0" max="100" step="0.1" required></label>
+              </div>
+            </div>
+            <div class="settings-foot">
+              <span class="settings-saved" id="ctl-settings-saved"></span>
+              <button class="btn btn-quiet btn-sm" type="button" id="ctl-settings-reset">Discard changes</button>
+              <button class="btn btn-primary btn-sm" type="submit" id="ctl-settings-save">Save settings</button>
+            </div>
+            <datalist id="tz-list">
+              <option value="Asia/Kolkata"></option><option value="Asia/Dubai"></option><option value="Asia/Singapore"></option>
+              <option value="Europe/London"></option><option value="Europe/Berlin"></option><option value="America/New_York"></option>
+              <option value="America/Los_Angeles"></option><option value="Africa/Nairobi"></option><option value="Australia/Sydney"></option><option value="UTC"></option>
+            </datalist>
+          </form>
+        </div>
+
+        <!-- Audit log -->
+        <div class="ctl-pane" data-pane="audit">
+          <div class="card">
+            <div class="card-head card-head-wrap">
+              <h2 class="card-title">Audit log</h2>
+              <div class="toolbar">
+                <select class="select select-sm" id="ctl-audit-filter" aria-label="Filter the audit log">
+                  <option value="">Everything</option>
+                  <option value="profiles">People</option>
+                  <option value="vehicles">Fleet</option>
+                  <option value="households">Households</option>
+                  <option value="pickup_requests">Pickups</option>
+                  <option value="emergency_reports">Issue reports</option>
+                  <option value="app_settings">Settings</option>
+                </select>
+              </div>
+            </div>
+            <div class="table-wrap">
+              <table class="table table-ctl">
+                <thead><tr><th>When</th><th>Who</th><th>Action</th><th>Record</th><th>Changes</th></tr></thead>
+                <tbody id="ctl-audit-tbody"></tbody>
+              </table>
+            </div>
+            <p class="card-foot">Written by the database itself, so it can't be edited from the app. Truck positions are not logged.</p>
           </div>
         </div>
       </div>
@@ -424,7 +763,7 @@
               </select>
             </label>
           </div>
-          <label class="field"><span>Instructions for the driver</span><textarea class="input" id="req-note" rows="3" required placeholder="Two bags beside the gate."></textarea></label>
+          <label class="field"><span>Instructions for the driver</span><textarea class="input" id="req-note" rows="3" maxlength="500" required placeholder="Two bags beside the gate."></textarea></label>
         </div>
         <div class="modal-foot">
           <button type="button" class="btn btn-quiet btn-close-pickup-modal">Cancel</button>
@@ -454,7 +793,7 @@
               <option value="Road Construction / Diversion">Road construction / diversion</option>
             </select>
           </label>
-          <label class="field"><span>Details and delay estimate</span><textarea class="input" id="emerg-msg" rows="3" required placeholder="Road blocked at 2nd Cross. Expect a 10–15 minute delay."></textarea></label>
+          <label class="field"><span>Details and delay estimate</span><textarea class="input" id="emerg-msg" rows="3" maxlength="500" required placeholder="Road blocked at 2nd Cross. Expect a 10–15 minute delay."></textarea></label>
         </div>
         <div class="modal-foot">
           <button type="button" class="btn btn-quiet btn-close-emergency-modal">Cancel</button>
@@ -476,20 +815,27 @@
       </div>
       <form id="register-house-form">
         <div class="modal-body">
-          <p class="modal-lede">Get a quiet alert when the truck is 500 m away, instead of a loudspeaker.</p>
+          <p class="modal-lede">Get a quiet alert when the truck is <span class="val-radius">500 m</span> away, instead of a loudspeaker.</p>
           <div class="field-row">
-            <label class="field"><span>House number</span><input type="text" class="input" id="reg-house-no" placeholder="150" required></label>
-            <label class="field"><span>Resident name</span><input type="text" class="input" id="reg-resident-name" placeholder="Rahul Sharma" required></label>
+            <label class="field"><span>House number</span><input type="text" class="input" id="reg-house-no" placeholder="150" maxlength="20" required></label>
+            <label class="field"><span>Resident name</span><input type="text" class="input" id="reg-resident-name" placeholder="Rahul Sharma" maxlength="120" required></label>
           </div>
-          <label class="field"><span>Ward / sector</span><input type="text" class="input" id="reg-ward" value="Ward 4 - Green Glen Sector" required></label>
-          <label class="field"><span>Street address</span><input type="text" class="input" id="reg-address" placeholder="House No. 150, 4th Cross" required></label>
+          <label class="field"><span>Ward / sector</span><input type="text" class="input" id="reg-ward" value="Ward 4 - Green Glen Sector" maxlength="80" required></label>
+          <label class="field"><span>Street address</span><input type="text" class="input" id="reg-address" placeholder="House No. 150, 4th Cross" maxlength="200" required></label>
           <div class="field-row">
-            <label class="field"><span>Landmark <em>optional</em></span><input type="text" class="input" id="reg-landmark" placeholder="Near Rose Garden"></label>
-            <label class="field"><span>Phone</span><input type="text" class="input" id="reg-contact" placeholder="+91 98123 45678"></label>
+            <label class="field"><span>Landmark <em>optional</em></span><input type="text" class="input" id="reg-landmark" placeholder="Near Rose Garden" maxlength="120"></label>
+            <label class="field"><span>Phone</span><input type="tel" class="input" id="reg-contact" placeholder="+91 98123 45678" maxlength="30"></label>
           </div>
-          <div class="field-row">
-            <label class="field"><span>Latitude</span><input type="number" step="0.00001" class="input mono" id="reg-lat" value="12.94150"></label>
-            <label class="field"><span>Longitude</span><input type="number" step="0.00001" class="input mono" id="reg-lon" value="77.62900"></label>
+          <div class="location-block">
+            <div class="field-row">
+              <label class="field"><span>Latitude</span><input type="number" step="0.00001" class="input mono" id="reg-lat" value="12.94150" required></label>
+              <label class="field"><span>Longitude</span><input type="number" step="0.00001" class="input mono" id="reg-lon" value="77.62900" required></label>
+            </div>
+            <button type="button" class="btn btn-quiet btn-sm btn-use-location" data-lat="reg-lat" data-lon="reg-lon" data-hint="reg-location-hint">
+              <svg viewBox="0 0 24 24"><path d="M12 21s-7-6.2-7-11.5A7 7 0 0 1 19 9.5C19 14.8 12 21 12 21z"/><circle cx="12" cy="9.5" r="2.5"/></svg>
+              Use my current location
+            </button>
+            <p class="field-hint" id="reg-location-hint">Stand at your gate for the most accurate pin.</p>
           </div>
         </div>
         <div class="modal-foot">
@@ -500,19 +846,195 @@
     </div>
   </div>
 
+  <!-- ══ Modal: Device permissions ══════════════════════════════════════ -->
+  <div class="modal-overlay" id="permissions-modal">
+    <div class="modal" role="dialog" aria-modal="true" aria-labelledby="permissions-modal-title">
+      <div class="modal-head">
+        <div>
+          <div class="eyebrow">This device</div>
+          <h2 class="modal-title" id="permissions-modal-title">Allow quiet alerts</h2>
+        </div>
+        <button class="icon-btn btn-close-permissions-modal" aria-label="Close"><svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg></button>
+      </div>
+      <div class="modal-body">
+        <p class="modal-lede" id="permissions-lede">Your browser asks before the app can use any of these. Turn on what you need; nothing is shared beyond what's described.</p>
+        <div class="perm-list" id="perm-list"></div>
+        <p class="field-hint">Change these any time from your account menu, or in your browser's site settings.</p>
+      </div>
+      <div class="modal-foot">
+        <button type="button" class="btn btn-primary btn-close-permissions-modal">Done</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ══ Modal: Person (Control) ════════════════════════════════════════ -->
+  <div class="modal-overlay" id="person-modal">
+    <div class="modal" role="dialog" aria-modal="true" aria-labelledby="person-modal-title">
+      <div class="modal-head">
+        <div>
+          <div class="eyebrow" id="person-modal-email"></div>
+          <h2 class="modal-title" id="person-modal-title">Edit person</h2>
+        </div>
+        <button class="icon-btn btn-close-person-modal" aria-label="Close"><svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg></button>
+      </div>
+      <form id="person-form">
+        <div class="modal-body">
+          <div class="field-row">
+            <label class="field"><span>Name</span><input class="input" id="person-name" maxlength="120" required></label>
+            <label class="field"><span>Phone <em>optional</em></span><input class="input" id="person-phone" type="tel" maxlength="30"></label>
+          </div>
+          <div class="field-row">
+            <label class="field"><span>Role</span>
+              <select class="input" id="person-role">
+                <option value="pending">Waiting for approval</option>
+                <option value="resident">Resident</option>
+                <option value="driver">Driver</option>
+                <option value="admin">Admin</option>
+              </select>
+            </label>
+            <label class="field"><span>Access</span>
+              <select class="input" id="person-status">
+                <option value="active">Active</option>
+                <option value="suspended">Suspended</option>
+              </select>
+            </label>
+          </div>
+          <label class="field person-link" data-for="resident"><span>Household</span>
+            <select class="input" id="person-household"></select>
+          </label>
+          <label class="field person-link" data-for="driver"><span>Vehicle on duty</span>
+            <select class="input" id="person-vehicle"></select>
+          </label>
+          <p class="field-hint" id="person-role-hint"></p>
+        </div>
+        <div class="modal-foot">
+          <button type="button" class="btn btn-quiet btn-close-person-modal">Cancel</button>
+          <button type="submit" class="btn btn-primary">Save</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- ══ Modal: Vehicle (Control) ═══════════════════════════════════════ -->
+  <div class="modal-overlay" id="vehicle-modal">
+    <div class="modal" role="dialog" aria-modal="true" aria-labelledby="vehicle-modal-title">
+      <div class="modal-head">
+        <div>
+          <div class="eyebrow">Fleet</div>
+          <h2 class="modal-title" id="vehicle-modal-title">Add vehicle</h2>
+        </div>
+        <button class="icon-btn btn-close-vehicle-modal" aria-label="Close"><svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg></button>
+      </div>
+      <form id="vehicle-form">
+        <div class="modal-body">
+          <div class="field-row">
+            <label class="field"><span>Vehicle ID</span><input class="input mono" id="vehicle-id" maxlength="20" pattern="[A-Za-z0-9\-]{2,20}" placeholder="GV-09" required></label>
+            <label class="field"><span>Registration</span><input class="input mono" id="vehicle-plate" maxlength="20" placeholder="KA-05-GV-2040" required></label>
+          </div>
+          <div class="field-row">
+            <label class="field"><span>Capacity <em>optional</em></span><input class="input" id="vehicle-capacity" maxlength="30" placeholder="2 tonnes"></label>
+            <label class="field"><span>Status</span>
+              <select class="input" id="vehicle-status">
+                <option value="active">Active</option>
+                <option value="maintenance">In maintenance</option>
+                <option value="retired">Retired</option>
+              </select>
+            </label>
+          </div>
+          <label class="field"><span>Driver on duty</span><select class="input" id="vehicle-driver"></select></label>
+          <p class="field-hint">Only people with the driver role appear here. Change roles under People.</p>
+        </div>
+        <div class="modal-foot">
+          <button type="button" class="btn btn-quiet btn-close-vehicle-modal">Cancel</button>
+          <button type="submit" class="btn btn-primary">Save vehicle</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- ══ Modal: Household (Control) ═════════════════════════════════════ -->
+  <div class="modal-overlay" id="household-modal">
+    <div class="modal" role="dialog" aria-modal="true" aria-labelledby="household-modal-title">
+      <div class="modal-head">
+        <div>
+          <div class="eyebrow">Households</div>
+          <h2 class="modal-title" id="household-modal-title">Add household</h2>
+        </div>
+        <button class="icon-btn btn-close-household-modal" aria-label="Close"><svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg></button>
+      </div>
+      <form id="household-form">
+        <div class="modal-body">
+          <div class="field-row">
+            <label class="field"><span>House number</span><input class="input" id="hh-house-no" maxlength="20" required></label>
+            <label class="field"><span>Resident name</span><input class="input" id="hh-resident" maxlength="120" required></label>
+          </div>
+          <div class="field-row">
+            <label class="field"><span>Ward</span><input class="input" id="hh-ward" maxlength="80"></label>
+            <label class="field"><span>Phone <em>optional</em></span><input class="input" id="hh-phone" type="tel" maxlength="30"></label>
+          </div>
+          <label class="field"><span>Street address</span><input class="input" id="hh-address" maxlength="200" required></label>
+          <label class="field"><span>Landmark <em>optional</em></span><input class="input" id="hh-landmark" maxlength="120"></label>
+          <div class="location-block">
+            <div class="field-row">
+              <label class="field"><span>Latitude</span><input class="input mono" id="hh-lat" type="number" step="0.00001" required></label>
+              <label class="field"><span>Longitude</span><input class="input mono" id="hh-lon" type="number" step="0.00001" required></label>
+            </div>
+            <button type="button" class="btn btn-quiet btn-sm btn-use-location" data-lat="hh-lat" data-lon="hh-lon" data-hint="hh-location-hint">
+              <svg viewBox="0 0 24 24"><path d="M12 21s-7-6.2-7-11.5A7 7 0 0 1 19 9.5C19 14.8 12 21 12 21z"/><circle cx="12" cy="9.5" r="2.5"/></svg>
+              Use my current location
+            </button>
+            <p class="field-hint" id="hh-location-hint"></p>
+          </div>
+          <div class="field-row">
+            <label class="field"><span>Linked account <em>optional</em></span><select class="input" id="hh-owner"></select></label>
+            <label class="field"><span>Alert distance <em>metres</em></span><input class="input mono" id="hh-alert-radius" type="number" step="10" placeholder="Ward default"></label>
+          </div>
+          <p class="field-hint" id="hh-alert-hint">The linked resident sees this household's alerts and can request pickups for it. Leave the alert distance empty to use the ward default.</p>
+        </div>
+        <div class="modal-foot">
+          <button type="button" class="btn btn-quiet btn-close-household-modal">Cancel</button>
+          <button type="submit" class="btn btn-primary">Save household</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- ══ Modal: Confirm ═════════════════════════════════════════════════ -->
+  <div class="modal-overlay" id="confirm-modal">
+    <div class="modal modal-sm" role="alertdialog" aria-modal="true" aria-labelledby="confirm-title" aria-describedby="confirm-message">
+      <div class="modal-head">
+        <div><h2 class="modal-title" id="confirm-title">Are you sure?</h2></div>
+      </div>
+      <div class="modal-body"><p class="modal-lede" id="confirm-message"></p></div>
+      <div class="modal-foot">
+        <button type="button" class="btn btn-quiet" id="confirm-cancel">Cancel</button>
+        <button type="button" class="btn btn-danger" id="confirm-ok">Remove</button>
+      </div>
+    </div>
+  </div>
+
   <div class="toast-container" id="toast-container" aria-live="polite"></div>
 
   <!-- MapLibre GL JS — basemap tiles from OpenFreeMap (OpenStreetMap data, no API key) -->
   <script src="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.js"
           integrity="sha384-SYKAG6cglRMN0RVvhNeBY0r3FYKNOJtznwA0v7B5Vp9tr31xAHsZC0DqkQ/pZDmj" crossorigin="anonymous"></script>
 
+  <!-- Supabase client (auth, database, realtime) -->
+  <script src="https://unpkg.com/@supabase/supabase-js@2.119.2/dist/umd/supabase.js"
+          integrity="sha384-A97u3Qnt9GZHURO9YJZRe7VQgGUeFzcv6I1oIGnUTxQrCxnpQMwR0/G8F2zt9abZ" crossorigin="anonymous"></script>
+
   <!-- Application JS Scripts (load order matters) -->
+  <script src="/js/config.js"></script>
   <script src="/js/geoUtils.js"></script>
   <script src="/js/routeData.js"></script>
   <script src="/js/dataStore.js"></script>
+  <script src="/js/supabaseStore.js"></script>
   <script src="/js/simulatorEngine.js"></script>
   <script src="/js/audioChime.js"></script>
   <script src="/js/mapManager.js"></script>
+  <script src="/js/deviceAccess.js"></script>
   <script src="/js/app.js"></script>
+  <script src="/js/controlPanel.js"></script>
+  <script src="/js/auth.js"></script>
 </body>
 </html>
