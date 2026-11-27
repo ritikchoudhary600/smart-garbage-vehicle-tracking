@@ -319,21 +319,30 @@
 
     <!-- ══ 2. Driver ═════════════════════════════════════════════════════ -->
     <section class="view" id="driver-view">
-      <div class="workspace workspace-reverse">
-        <div class="map-shell">
+      <div class="workspace workspace-reverse workspace-driver">
+        <div class="map-shell map-shell-driver">
           <div class="map" id="driver-map-container"></div>
           <div class="map-hud">
             <div><span class="hud-label">Speed</span><span class="hud-value val-drv-speed">22 km/h</span></div>
             <div><span class="hud-label">Heading</span><span class="hud-value val-drv-heading">NE</span></div>
+            <div><span class="hud-label">Area</span><span class="hud-value val-drv-locality">Ward 4</span></div>
+          </div>
+          <div class="map-legend">
+            <span><i class="lg lg-vehicle"></i>Vehicle</span>
+            <span><i class="lg lg-route"></i>Route</span>
+            <span><i class="lg lg-home"></i>Houses</span>
+            <span><i class="lg lg-pickup"></i>Pickup</span>
           </div>
         </div>
 
-        <aside class="panel">
-          <div class="eyebrow">Vehicle <span class="val-vehicle-id">GV-04</span> · <span id="drv-plate">KA-05-GV-2024</span></div>
-          <h1 class="res-name" id="drv-display-name">Ramesh Kumar</h1>
-          <div class="account-row">
-            <select class="select" id="driver-profile-select" aria-label="Driver on duty"></select>
-            <button class="btn btn-danger-quiet btn-sm" id="btn-open-emergency-modal">Report issue</button>
+        <aside class="panel driver-panel">
+          <div class="drv-head-card">
+            <div class="eyebrow">Vehicle <span class="val-vehicle-id">GV-04</span> · <span id="drv-plate">KA-05-GV-2024</span></div>
+            <h1 class="res-name" id="drv-display-name">Ramesh Kumar</h1>
+            <div class="account-row">
+              <select class="select" id="driver-profile-select" aria-label="Driver on duty"></select>
+              <button class="btn btn-danger-quiet btn-sm" id="btn-open-emergency-modal">Report issue</button>
+            </div>
           </div>
 
           <div class="notice" id="drv-no-vehicle" hidden>
@@ -345,27 +354,29 @@
             <div class="gps-main">
               <span class="gps-dot" aria-hidden="true"></span>
               <div>
-                <div class="gps-title">Live GPS</div>
+                <div class="gps-title">Driver location source</div>
                 <div class="gps-sub" id="gps-status">Off. The route simulator is driving the truck.</div>
               </div>
             </div>
             <button class="btn btn-outline btn-sm" id="btn-live-gps" type="button">Share live location</button>
           </div>
 
-          <div class="route-progress">
-            <div class="route-progress-head">
-              <span id="drv-route-step">Waypoint 1 of 14</span>
-              <span class="mono" id="drv-route-pct">0%</span>
+          <div class="drv-telemetry-card">
+            <div class="route-progress">
+              <div class="route-progress-head">
+                <span id="drv-route-step">Waypoint 1 of 14</span>
+                <span class="mono" id="drv-route-pct">0%</span>
+              </div>
+              <div class="track"><div class="track-fill" id="drv-route-progress-bar"></div></div>
+              <div class="route-progress-sub"><span class="val-ward-name">Ward 4</span> residential morning circuit</div>
             </div>
-            <div class="track"><div class="track-fill" id="drv-route-progress-bar"></div></div>
-            <div class="route-progress-sub"><span class="val-ward-name">Ward 4</span> residential morning circuit</div>
-          </div>
 
-          <dl class="stats">
-            <div><dt>Speed</dt><dd class="val-drv-speed">22 km/h</dd></div>
-            <div><dt>Heading</dt><dd class="val-drv-heading">NE</dd></div>
-            <div class="stats-wide"><dt>Locality</dt><dd class="val-drv-locality">Ward 4</dd></div>
-          </dl>
+            <dl class="stats">
+              <div><dt>Speed</dt><dd class="val-drv-speed">22 km/h</dd></div>
+              <div><dt>Heading</dt><dd class="val-drv-heading">NE</dd></div>
+              <div class="stats-wide"><dt>Locality</dt><dd class="val-drv-locality">Ward 4</dd></div>
+            </dl>
+          </div>
 
           <section class="block">
             <h2 class="block-title">Pickup queue <span class="block-note">Nearest first</span></h2>

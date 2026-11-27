@@ -92,6 +92,24 @@ class StyleSwitchControl {
   onRemove() { this.el.remove(); }
 }
 
+/* ── Recenter map control (MapLibre IControl) ─────────────────────────── */
+class RecenterControl {
+  constructor(inst) { this.inst = inst; }
+  onAdd() {
+    this.el = document.createElement('div');
+    this.el.className = 'maplibregl-ctrl maplibregl-ctrl-group';
+    this.el.innerHTML = `<button type="button" class="map-recenter-btn" title="Recenter map" aria-label="Recenter map">
+      <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+        <circle cx="12" cy="12" r="3.5"></circle>
+        <path d="M12 2v3M12 19v3M2 12h3M19 12h3"></path>
+      </svg>
+    </button>`;
+    this.el.querySelector('button').addEventListener('click', () => this.inst.recenter());
+    return this.el;
+  }
+  onRemove() { this.el.remove(); }
+}
+
 class MapInstance {
   constructor(containerId, center, zoom) {
     this.containerId = containerId;
@@ -166,6 +184,7 @@ class MapInstance {
     });
     this.map.touchZoomRotate.disableRotation();
     this.map.addControl(new StyleSwitchControl(this), 'top-right');
+    this.map.addControl(new RecenterControl(this), 'bottom-right');
     this.map.addControl(new maplibregl.NavigationControl({ showCompass: false }), 'bottom-right');
     // "Show my location": a blue dot with its accuracy circle, from the device's GPS
     this.map.addControl(new maplibregl.GeolocateControl({
@@ -210,6 +229,19 @@ class MapInstance {
     layers.forEach((l, i) => { if (l.type !== 'symbol') lastShape = i; });
     const firstSymbol = (layers[lastShape + 1] || {}).id;
 
+    // Clarify street geometry slightly on the minimal light basemap
+    if (this.styleKey === 'minimal') {
+      layers.forEach((l) => {
+        if (l.type === 'line' && /road|street|highway|path|bridge|tunnel/i.test(l.id)) {
+          try {
+            if (!l.id.includes('case')) {
+              map.setPaintProperty(l.id, 'line-opacity', 0.92);
+            }
+          } catch (e) { /* ignore expression-locked layers */ }
+        }
+      });
+    }
+
     map.addSource('home-zone', { type: 'geojson', data: circleFeature(this.homeZoneCenter, this.homeZoneRadiusM) });
     map.addSource('route', { type: 'geojson', data: lineFeature(this.route) });
     map.addSource('trail', { type: 'geojson', data: lineFeature(this.trail) });
@@ -227,12 +259,18 @@ class MapInstance {
         'line-dasharray': [3, 2],
       } }, firstSymbol);
 
+    map.addLayer({ id: 'route-casing', type: 'line', source: 'route',
+      layout: { 'line-cap': 'round', 'line-join': 'round' },
+      paint: { 'line-color': '#FFFFFF', 'line-width': 6.5, 'line-opacity': 0.78 } }, firstSymbol);
     map.addLayer({ id: 'route-line', type: 'line', source: 'route',
       layout: { 'line-cap': 'round', 'line-join': 'round' },
-      paint: { 'line-color': COLORS.ink, 'line-width': 4, 'line-opacity': 0.2 } }, firstSymbol);
+      paint: { 'line-color': '#4B5563', 'line-width': 3.5, 'line-opacity': 0.65, 'line-dasharray': [2.2, 2] } }, firstSymbol);
+    map.addLayer({ id: 'trail-casing', type: 'line', source: 'trail',
+      layout: { 'line-cap': 'round', 'line-join': 'round' },
+      paint: { 'line-color': '#FFFFFF', 'line-width': 7.5, 'line-opacity': 0.85 } }, firstSymbol);
     map.addLayer({ id: 'trail-line', type: 'line', source: 'trail',
       layout: { 'line-cap': 'round', 'line-join': 'round' },
-      paint: { 'line-color': COLORS.accent, 'line-width': 4.5, 'line-opacity': 0.95 } }, firstSymbol);
+      paint: { 'line-color': COLORS.accent, 'line-width': 4.5, 'line-opacity': 0.96 } }, firstSymbol);
   }
 
   _setSource(name, data) {
@@ -259,6 +297,23 @@ class MapInstance {
     if (!this._ensureMap()) return;
     this.map.resize();
     this._fit();
+  }
+
+  recenter() {
+    if (!this.map) return;
+    if (this.focus && this.focus.length) {
+      if (this.focus.length === 1) {
+        this.map.easeTo({ center: toLngLat(this.focus[0]), zoom: 16, duration: 500 });
+      } else {
+        const lats = this.focus.map(p => p[0]), lons = this.focus.map(p => p[1]);
+        this.map.fitBounds(
+          [[Math.min(...lons), Math.min(...lats)], [Math.max(...lons), Math.max(...lats)]],
+          { padding: 64, maxZoom: 16, duration: 500 }
+        );
+      }
+    } else if (this.pos) {
+      this.map.easeTo({ center: toLngLat(this.pos), zoom: 16, duration: 500 });
+    }
   }
 
   /* ── Hover tooltips ─────────────────────────────────────────────────── */
