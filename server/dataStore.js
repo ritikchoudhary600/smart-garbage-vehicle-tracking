@@ -271,7 +271,7 @@ class DataStore {
           recipient: house.residentName,
           type: 'geofence_500m',
           title: 'Garbage Vehicle Approaching (500m)',
-          message: `Garbage collection vehicle is approximately ${Math.round(dist)} m away. Please keep your garbage ready.`,
+          message: 'Garbage collection vehicle is approximately 500 metres away. Please keep your garbage ready.',
           distance: Math.round(dist),
           timestamp: new Date().toISOString(),
           read: false

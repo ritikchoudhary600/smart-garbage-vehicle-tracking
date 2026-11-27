@@ -212,6 +212,96 @@ test('Simulator can teleport by coordinates and calculates route progress', () =
   assert.strictEqual(prog.formatted, '54%');
 });
 
+// 12. Browser Geofence 500m Zone States, Exact Alert Text & Reset Tests
+test('Browser geofence transitions Outside Zone -> Approaching -> Alert Triggered -> Vehicle Passed and resets on exit', () => {
+  const fs = require('node:fs');
+  const path = require('node:path');
+  const vm = require('node:vm');
+
+  const events = [];
+  const sandbox = {
+    window: {
+      dispatchEvent: (ev) => events.push(ev),
+    },
+    CustomEvent: function (type, opts) { return { type, detail: opts && opts.detail }; },
+    Date, Math, Number, String, Boolean, Array, Object, Set, Map, JSON, console,
+  };
+  sandbox.window.window = sandbox.window;
+  vm.createContext(sandbox);
+
+  for (const f of ['public/js/geoUtils.js', 'public/js/routeData.js', 'public/js/dataStore.js', 'public/js/simulatorEngine.js']) {
+    vm.runInContext(fs.readFileSync(path.join(__dirname, '..', f), 'utf8'), sandbox, { filename: f });
+  }
+
+  const store = sandbox.window.AppDataStore;
+  const sim = sandbox.window.AppSimulatorEngine;
+  const { computeZoneStatus } = sandbox.window.GeoUtils;
+  const h125 = () => store.houses.find(h => h.houseNo === '125');
+
+  // WP 0 (~1300m): Outside Zone
+  sim.reset();
+  assert.strictEqual(computeZoneStatus(h125(), store.settings).label, 'Outside Zone');
+
+  // WP 3 (~720m): Approaching
+  sim.teleport(3);
+  assert.strictEqual(computeZoneStatus(h125(), store.settings).label, 'Approaching');
+
+  // WP 5 (~480m <= 500m): Alert Triggered + exact notification text
+  events.length = 0;
+  sim.teleport(5);
+  assert.strictEqual(h125().isInGeofence, true);
+  assert.strictEqual(computeZoneStatus(h125(), store.settings).label, 'Alert Triggered');
+  const alertEv = events.find(e => e.type === 'geofence_alert' && e.detail.houseNo === '125');
+  assert.ok(alertEv, 'Expected geofence_alert event for House 125 at WP 5');
+  assert.strictEqual(
+    alertEv.detail.message,
+    'Garbage collection vehicle is approximately 500 metres away. Please keep your garbage ready.'
+  );
+
+  // WP 6 (~320m): stays inside -> no duplicate alert
+  events.length = 0;
+  sim.teleport(6);
+  assert.strictEqual(computeZoneStatus(h125(), store.settings).label, 'Alert Triggered');
+  assert.strictEqual(
+    events.filter(e => e.type === 'geofence_alert' && e.detail.houseNo === '125').length,
+    0,
+    'Must not re-alert while vehicle remains inside 500m circle'
+  );
+
+  // WP 8 (at gate ~0m) -> WP 9 (moving away ~466m): Vehicle Passed
+  sim.teleport(8);
+  sim.teleport(9);
+  assert.strictEqual(computeZoneStatus(h125(), store.settings).label, 'Vehicle Passed');
+
+  // Leave zone (> 550m, WP 0 ~1300m) -> resets alert latch; re-entry at WP 5 triggers again
+  sim.teleport(0);
+  assert.strictEqual(h125().isInGeofence, false, 'Alert latch must reset after vehicle leaves the 500m zone');
+  events.length = 0;
+  sim.teleport(5);
+  assert.strictEqual(
+    events.filter(e => e.type === 'geofence_alert' && e.detail.houseNo === '125').length,
+    1,
+    'Future approach into 500m zone must trigger notification again'
+  );
+});
+
+// 13. Admin Login & Protected Route Static Guards
+test('Frontend auth blocks demo/resident/driver from Admin Dashboard and exposes no plain-text passwords', () => {
+  const fs = require('node:fs');
+  const path = require('node:path');
+  const authCode = fs.readFileSync(path.join(__dirname, '..', 'public/js/auth.js'), 'utf8');
+  const appCode = fs.readFileSync(path.join(__dirname, '..', 'public/js/app.js'), 'utf8');
+  const htmlCode = fs.readFileSync(path.join(__dirname, '..', 'public/index.html'), 'utf8');
+
+  // Demo profile must not have role: 'admin'
+  assert.ok(!/launchDemo[\s\S]*role:\s*['"]admin['"]/.test(authCode), 'Demo mode must not launch with admin role');
+  assert.ok(/signInWithPassword/.test(authCode), 'Admin login must use Supabase Auth signInWithPassword');
+  assert.ok(/profile\.role\s*!==\s*['"]admin['"]/.test(authCode), 'Admin login must verify admin role');
+  assert.ok(/demo:\s*\[\s*['"]resident['"],\s*['"]driver['"],\s*['"]split['"]\s*\]/.test(appCode), 'Demo views must exclude admin & control');
+  assert.ok(/id="admin-login-form"/.test(htmlCode) && /id="btn-toggle-admin-password"/.test(htmlCode), 'Admin login form and show/hide password toggle must exist');
+  assert.ok(!/admin-signup|admin-register/i.test(htmlCode), 'Public admin registration must not exist');
+});
+
 console.log(`\n------------------------------------------------------------`);
 console.log(`Test Results: ${passedTests} / ${totalTests} passed.`);
 if (passedTests === totalTests) {

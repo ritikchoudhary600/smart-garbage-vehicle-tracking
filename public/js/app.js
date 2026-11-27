@@ -70,14 +70,15 @@
     const mins = radius / TRUCK_M_PER_MIN;
     return mins < 1 ? 'under a minute before it reaches your gate' : `about ${Math.round(mins)} min before it reaches your gate`;
   }
-  const { effectiveAlertRadius, formatMeters } = window.GeoUtils;
+  const { effectiveAlertRadius, formatMeters, computeZoneStatus } = window.GeoUtils;
 
   const ROLE_VIEWS = {
     admin:    ['resident', 'driver', 'admin', 'split', 'control'],
+    demo:     ['resident', 'driver', 'split'],
     driver:   ['driver'],
     resident: ['resident'],
   };
-  const ROLE_LABELS = { admin: 'Admin', driver: 'Driver', resident: 'Resident', pending: 'Waiting for approval' };
+  const ROLE_LABELS = { admin: 'Admin', demo: 'Demo', driver: 'Driver', resident: 'Resident', pending: 'Waiting for approval' };
 
   const ICONS = {
     notifications: '<svg viewBox="0 0 24 24"><path d="M6 16V11a6 6 0 1 1 12 0v5l1.5 2h-15z"/><path d="M10 20.5a2 2 0 0 0 4 0"/></svg>',
@@ -110,11 +111,11 @@
     get state()  { return this.store.getState(); }
     get isDemo() { return this.store.mode === 'demo'; }
 
-    // Admins can drive any tracked vehicle; drivers only the one assigned to them
+    // Admins and demo visitors can drive the simulated vehicle; drivers only the one assigned to them
     get canDrive() {
       const v = this.state.vehicles[0];
       if (!v) return false;
-      if (this.role === 'admin') return true;
+      if (this.role === 'admin' || this.isDemo) return true;
       return this.role === 'driver' && v.driverId === this.profile.id;
     }
 
@@ -229,11 +230,22 @@
       });
       window.addEventListener('hashchange', () => {
         const hash = window.location.hash.replace('#', '');
-        if (this.views.includes(hash) && hash !== this.currentRole) this._switchRole(hash);
+        if (hash && hash !== this.currentRole) this._switchRole(hash);
       });
     }
 
     _switchRole(role) {
+      if (role === 'admin-login' || ((role === 'admin' || role === 'control') && this.role !== 'admin')) {
+        if (this.isDemo) {
+          if (window.Auth && window.Auth.openAdminLogin) {
+            window.Auth.openAdminLogin();
+            return;
+          }
+        } else {
+          this._showToast('Admin access required', 'Residents and drivers cannot access the Municipal Admin Dashboard.', 'error');
+          role = this.views[0];
+        }
+      }
       if (!this.views.includes(role)) role = this.views[0];
       this.currentRole = role;
       qsa('.role-tab').forEach(btn => btn.classList.toggle('active', btn.dataset.role === role));
@@ -487,6 +499,10 @@
       });
       byId('btn-sign-out').addEventListener('click', () => window.Auth.signOut());
       byId('btn-demo-pill').addEventListener('click', () => window.Auth.signOut());   // leave the demo
+      const topbarAdminBtn = byId('btn-topbar-admin-login');
+      if (topbarAdminBtn) topbarAdminBtn.addEventListener('click', () => window.Auth.openAdminLogin());
+      const adminLogoutBtn = byId('btn-admin-logout');
+      if (adminLogoutBtn) adminLogoutBtn.addEventListener('click', () => window.Auth.signOut());
       byId('btn-open-permissions').addEventListener('click', () => {
         this._closeUserMenu();
         this._openPermissions();
@@ -795,11 +811,11 @@
       });
     }
 
-    // Admins pick the driver on duty; drivers just see their own name
+    // Admins and demo visitors pick the driver on duty; drivers just see their own name
     _populateDriverSelect() {
       const sel = byId('driver-profile-select');
       const v = this.state.vehicles[0];
-      sel.hidden = this.role !== 'admin' || !v;
+      sel.hidden = (this.role !== 'admin' && !this.isDemo) || !v;
       if (sel.hidden) return;
       const drivers = this.state.profiles.filter(p => p.role === 'driver' && p.status === 'active');
       const opts = [];
@@ -996,12 +1012,17 @@
 
       if (!house) {
         qsa('.geofence-alert-box').forEach(box => box.classList.remove('visible'));
+        qsa('.val-zone-status').forEach(el => {
+          el.textContent = 'Outside Zone';
+          el.dataset.status = 'outside';
+        });
         return;
       }
 
       const dist = vehicle && vehicle.lat != null ? house.distanceToVehicle : null;
       const arrived = dist != null && dist < ARRIVED_M;
       const [num, unit] = arrived ? ['0', 'm'] : distParts(dist);
+      const zoneStatus = computeZoneStatus(house, this.state.settings);
 
       setText('.val-res-name', house.residentName);
       setText('.val-res-house', `#${house.houseNo}`);
@@ -1013,6 +1034,10 @@
       setText('.val-res-eta', arrived ? 'At your gate' : ((dist != null && house.eta && house.eta.formatted) || '—'));
       setText('.val-res-locality', (vehicle && vehicle.locality) || '—');
 
+      qsa('.val-zone-status').forEach(el => {
+        el.textContent = zoneStatus.label;
+        el.dataset.status = zoneStatus.code;
+      });
       qsa('.geofence-alert-box').forEach(box => box.classList.toggle('visible', !!house.isInGeofence));
 
       // This household's own alert distance drives the track, legend and ring
@@ -1106,7 +1131,7 @@
       setText('#drv-route-pct',  live ? '—' : `${pct}%`);
 
       // Open pickup queue, nearest first
-      const canWork = this.role === 'admin' || this.role === 'driver';
+      const canWork = this.role === 'admin' || this.role === 'driver' || this.isDemo;
       const open = this.state.pickupRequests
         .filter(r => r.status === 'Pending' || r.status === 'Accepted')
         .sort((a, b) => (a.distanceToVehicle || 0) - (b.distanceToVehicle || 0));
@@ -1279,6 +1304,36 @@
     // nearby truck, the driver's truck and stops, or the whole fleet), never the
     // demo route unless there is nothing else. The key changes only when that
     // set changes, so maps don't jump while someone pans.
+    _residentZoneAnchor() {
+      const house = this._selectedHouse();
+      if (house && Number.isFinite(house.lat) && Number.isFinite(house.lon)) {
+        return {
+          center: [house.lat, house.lon],
+          radius: this._houseRadius(house),
+          isAlert: Boolean(house.isInGeofence),
+          key: `h:${house.id}:${house.lat},${house.lon}`,
+        };
+      }
+      // Fallback: if resident hasn't registered a home yet, center on their open pickup request
+      const pickup = this.state.pickupRequests.find(r =>
+        (r.status === 'Pending' || r.status === 'Accepted') && Number.isFinite(r.lat) && Number.isFinite(r.lon));
+      if (pickup) {
+        return {
+          center: [pickup.lat, pickup.lon],
+          radius: this.state.settings.geofenceRadiusM || 500,
+          isAlert: false,
+          key: `p:${pickup.id}:${pickup.lat},${pickup.lon}`,
+        };
+      }
+      return null;
+    }
+
+    _circleExtents([lat, lon], radiusM) {
+      const dLat = radiusM / 111320;
+      const dLon = radiusM / (111320 * Math.max(0.1, Math.cos(lat * Math.PI / 180)));
+      return [[lat + dLat, lon], [lat - dLat, lon], [lat, lon + dLon], [lat, lon - dLon]];
+    }
+
     _mapFocus(id) {
       const NEAR_M = 5000;
       const near = (a, b, m) => window.GeoUtils.calculateHaversineDistance(a[0], a[1], b[0], b[1]) <= m;
@@ -1286,11 +1341,13 @@
       const truck = v && v.lat != null ? [v.lat, v.lon] : null;
 
       if (id === 'resident-map-container' || id === 'split-map-container') {
-        const h = this._selectedHouse();
-        if (h) {
-          const home = [h.lat, h.lon];
+        const anchor = this._residentZoneAnchor();
+        if (anchor) {
+          const home = anchor.center;
           const withTruck = !!truck && near(home, truck, NEAR_M);
-          return { points: withTruck ? [home, truck] : [home], key: `home:${h.id}:${h.lat},${h.lon}:${withTruck}` };
+          const pts = [...this._circleExtents(home, anchor.radius), home];
+          if (withTruck) pts.push(truck);
+          return { points: pts, key: `${anchor.key}:${anchor.radius}:${withTruck}` };
         }
       }
       if (id === 'driver-map-container' && truck) {
@@ -1370,12 +1427,17 @@
         this._lastMapIndex = cur;
       }
 
+      const anchor = this._residentZoneAnchor();
       const house = this._selectedHouse();
       const ownRadius = house ? this._houseRadius(house) : null;
       for (const [id, inst] of Object.entries(this.maps)) {
+        const isResidentMap = id === 'resident-map-container' || id === 'split-map-container';
         const focus = this._mapFocus(id);
         inst.setFocus(focus.points, focus.key);
-        inst.setZoneRadius(id === 'resident-map-container' || id === 'split-map-container' ? ownRadius : null);
+        inst.setZoneRadius(isResidentMap ? ownRadius : null);
+        if (isResidentMap) {
+          inst.setHomeZone(anchor ? anchor.center : null, anchor ? anchor.radius : 500, anchor ? anchor.isAlert : false);
+        }
         if (opts) inst.updateVehicle(vehicle, opts);
         else inst.hideVehicle();
         inst.updateHouses(houses, this.selectedHouseNo);

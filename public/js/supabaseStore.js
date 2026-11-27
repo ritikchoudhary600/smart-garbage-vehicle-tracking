@@ -69,6 +69,7 @@
       ownerId: r.owner_id, garbageReady: r.garbage_ready, isInGeofence: r.is_in_geofence,
       alertRadiusM: r.alert_radius_m,
       notifiedAt: r.notified_at,
+      hasPassed: false, prevDistanceToVehicle: null, minDistanceInZone: null,
       distanceToVehicle: null, bearing: null, direction: null, eta: null,
     };
   }
@@ -266,13 +267,36 @@
         for (const r of this.pickupRequests) r.distanceToVehicle = null;
         return;
       }
+      const { effectiveAlertRadius } = window.GeoUtils;
       for (const house of this.houses) {
         const dist = calculateHaversineDistance(vehicle.lat, vehicle.lon, house.lat, house.lon);
         const bear = calculateBearing(vehicle.lat, vehicle.lon, house.lat, house.lon);
+        const prevDist = house.distanceToVehicle;
+        const radius = effectiveAlertRadius(house, this.settings);
+        const approachMax = Math.max(radius * 1.6, radius + 300);
+
+        house.prevDistanceToVehicle = prevDist;
         house.distanceToVehicle = dist;
         house.bearing   = Math.round(bear);
         house.direction = getBearingOctant(bear);
         house.eta       = calculateETA(dist, vehicle.speed || 20);
+
+        if (house.isInGeofence || dist <= radius) {
+          if (house.minDistanceInZone == null || dist < house.minDistanceInZone) house.minDistanceInZone = dist;
+          if (house.minDistanceInZone <= Math.min(120, radius * 0.35) &&
+              dist > house.minDistanceInZone + 80 &&
+              prevDist != null && dist > prevDist + 5) {
+            house.hasPassed = true;
+          }
+        } else {
+          if (house.minDistanceInZone != null && prevDist != null && dist > house.minDistanceInZone + 50) {
+            house.hasPassed = true;
+          }
+          house.minDistanceInZone = null;
+          if (house.hasPassed && prevDist != null && dist < prevDist - 15 && dist <= approachMax) {
+            house.hasPassed = false;
+          }
+        }
       }
       for (const req of this.pickupRequests) {
         req.distanceToVehicle = calculateHaversineDistance(vehicle.lat, vehicle.lon, req.lat, req.lon);
@@ -362,6 +386,13 @@
         return;
       }
       const next = mapHouse(n);
+      const existing = this.houses.find(h => h.id === next.id);
+      if (existing) {
+        next.hasPassed = existing.hasPassed;
+        next.prevDistanceToVehicle = existing.prevDistanceToVehicle;
+        next.minDistanceInZone = existing.minDistanceInZone;
+        next.distanceToVehicle = existing.distanceToVehicle;
+      }
       const prev = this._upsert(this.houses, next);
       this.recalculateDistances();
       if (!prev) this.broadcast('house_registered', { house: next, isNew: true });
@@ -497,7 +528,12 @@
     }
 
     resetGeofences() {
-      for (const h of this.houses) h.isInGeofence = false;
+      for (const h of this.houses) {
+        h.isInGeofence = false;
+        h.hasPassed = false;
+        h.prevDistanceToVehicle = null;
+        h.minDistanceInZone = null;
+      }
       return this._serial(async () => {
         const { error } = await this.client.rpc('reset_geofences');
         if (error) this._reportError('Could not reset the geofence', error);

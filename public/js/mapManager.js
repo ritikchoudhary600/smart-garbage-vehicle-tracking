@@ -43,6 +43,28 @@ function lineFeature(latlngs) {
   return { type: 'Feature', properties: {}, geometry: { type: 'LineString', coordinates: latlngs.map(toLngLat) } };
 }
 
+// True geodesic circle polygon on the ground (exact radius in metres)
+function circleFeature(center, radiusMeters, steps = 64) {
+  if (!center || !Number.isFinite(center[0]) || !Number.isFinite(center[1]) || !radiusMeters || radiusMeters <= 0) {
+    return { type: 'FeatureCollection', features: [] };
+  }
+  const R = 6371000;
+  const lat1 = center[0] * Math.PI / 180;
+  const lon1 = center[1] * Math.PI / 180;
+  const d = radiusMeters / R;
+  const coords = [];
+  for (let i = 0; i <= steps; i++) {
+    const brng = (i / steps) * 2 * Math.PI;
+    const lat2 = Math.asin(Math.sin(lat1) * Math.cos(d) + Math.cos(lat1) * Math.sin(d) * Math.cos(brng));
+    const lon2 = lon1 + Math.atan2(
+      Math.sin(brng) * Math.sin(d) * Math.cos(lat1),
+      Math.cos(d) - Math.sin(lat1) * Math.sin(lat2)
+    );
+    coords.push([lon2 * 180 / Math.PI, lat2 * 180 / Math.PI]);
+  }
+  return { type: 'Feature', properties: {}, geometry: { type: 'Polygon', coordinates: [coords] } };
+}
+
 // Point `meters` due east of [lat, lon] (small-distance approximation)
 function offsetEast([lat, lon], meters) {
   return [lat, lon + meters / (111320 * Math.cos(lat * Math.PI / 180))];
@@ -96,6 +118,9 @@ class MapInstance {
     this._target = null;
     this._anim   = null;
     this.zoneRadiusM = null;   // per-map override (a resident's own alert distance)
+    this.homeZoneCenter = null;
+    this.homeZoneRadiusM = 500;
+    this.homeZoneAlert = false;
 
     // What the map frames: the app passes the points that matter to this
     // viewer (their household, the truck, the fleet). Refits only when the
@@ -185,8 +210,22 @@ class MapInstance {
     layers.forEach((l, i) => { if (l.type !== 'symbol') lastShape = i; });
     const firstSymbol = (layers[lastShape + 1] || {}).id;
 
+    map.addSource('home-zone', { type: 'geojson', data: circleFeature(this.homeZoneCenter, this.homeZoneRadiusM) });
     map.addSource('route', { type: 'geojson', data: lineFeature(this.route) });
     map.addSource('trail', { type: 'geojson', data: lineFeature(this.trail) });
+
+    map.addLayer({ id: 'home-zone-fill', type: 'fill', source: 'home-zone',
+      paint: {
+        'fill-color': this.homeZoneAlert ? '#1F4D3A' : '#2E6B52',
+        'fill-opacity': this.homeZoneAlert ? 0.20 : 0.11,
+      } }, firstSymbol);
+    map.addLayer({ id: 'home-zone-line', type: 'line', source: 'home-zone',
+      paint: {
+        'line-color': '#1F4D3A',
+        'line-width': this.homeZoneAlert ? 2.5 : 2,
+        'line-opacity': 0.85,
+        'line-dasharray': [3, 2],
+      } }, firstSymbol);
 
     map.addLayer({ id: 'route-line', type: 'line', source: 'route',
       layout: { 'line-cap': 'round', 'line-join': 'round' },
@@ -271,9 +310,33 @@ class MapInstance {
       this._bindTip(this.vehicleMarker);
     }
     if (this.vehicle) this.vehicleMarker._tipHtml = this._tooltipHtml(this.vehicle);
+    if (this.zoneMarker) {
+      this.zoneMarker.getElement().style.display = this.homeZoneCenter ? 'none' : '';
+    }
     this._place(this.pos);
     this._sizeZone();
     this._rotate(this.bearing);
+  }
+
+  // Draw/update the 500 m circular geofence centered on the resident's home or pickup location
+  setHomeZone(center, radiusMeters = 500, isAlert = false) {
+    const valid = Array.isArray(center) && Number.isFinite(center[0]) && Number.isFinite(center[1]);
+    this.homeZoneCenter  = valid ? [center[0], center[1]] : null;
+    this.homeZoneRadiusM = Number(radiusMeters) > 0 ? Number(radiusMeters) : 500;
+    this.homeZoneAlert   = Boolean(isAlert);
+    if (this.zoneMarker) {
+      this.zoneMarker.getElement().style.display = this.homeZoneCenter ? 'none' : '';
+    }
+    if (!this.map) return;
+    this._setSource('home-zone', circleFeature(this.homeZoneCenter, this.homeZoneRadiusM));
+    if (this.map.getLayer('home-zone-fill')) {
+      this.map.setPaintProperty('home-zone-fill', 'fill-color', this.homeZoneAlert ? '#1F4D3A' : '#2E6B52');
+      this.map.setPaintProperty('home-zone-fill', 'fill-opacity', this.homeZoneAlert ? 0.20 : 0.11);
+    }
+    if (this.map.getLayer('home-zone-line')) {
+      this.map.setPaintProperty('home-zone-line', 'line-width', this.homeZoneAlert ? 2.5 : 2);
+      this.map.setPaintProperty('home-zone-line', 'line-opacity', this.homeZoneAlert ? 0.95 : 0.85);
+    }
   }
 
   // Ring diameter in pixels for the alert distance at the current zoom

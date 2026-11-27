@@ -51,6 +51,7 @@
   function makeHouse(h) {
     return {
       garbageReady: false, isInGeofence: false,
+      hasPassed: false, prevDistanceToVehicle: null, minDistanceInZone: null,
       distanceToVehicle: null, bearing: null, direction: null, eta: null,
       notifiedAt: null, ownerId: null, phone: '', landmark: '', alertRadiusM: null,
       ...h,
@@ -275,27 +276,55 @@
       for (const house of this.houses) {
         const dist = calculateHaversineDistance(vehicle.lat, vehicle.lon, house.lat, house.lon);
         const bear = calculateBearing(vehicle.lat, vehicle.lon, house.lat, house.lon);
+        const prevDist = house.distanceToVehicle;
 
+        house.prevDistanceToVehicle = prevDist;
         house.distanceToVehicle = dist;
         house.bearing           = Math.round(bear);
         house.direction         = getBearingOctant(bear);
         house.eta               = calculateETA(dist, vehicle.speed || 20);
 
         /* Geofence hysteresis: alert within the household's own distance,
-           re-arm only once the truck is the buffer beyond it */
+           re-arm only once the truck leaves beyond the buffer */
         const radius = effectiveAlertRadius(house, this.settings);
+        const approachMax = Math.max(radius * 1.6, radius + 300);
+
         if (!house.isInGeofence && dist <= radius) {
-          house.isInGeofence = true;
-          house.notifiedAt   = new Date().toISOString();
+          house.isInGeofence      = true;
+          house.hasPassed         = false;
+          house.minDistanceInZone = dist;
+          house.notifiedAt        = new Date().toISOString();
           this.analytics.geofenceAlertsFired++;
           this.analytics.announcementsAvoided++;
           this._recalcAnalytics();
-          const notif = this._notify(house.houseNo, 'geofence_alert', `Garbage Vehicle Approaching (${radius}m)`,
-            `Garbage collection vehicle is approximately ${Math.round(dist)} m away. Please keep your garbage ready.`,
+          const msg = radius === 500
+            ? 'Garbage collection vehicle is approximately 500 metres away. Please keep your garbage ready.'
+            : `Garbage collection vehicle is approximately ${radius} metres away. Please keep your garbage ready.`;
+          const notif = this._notify(house.houseNo, 'geofence_alert', `Garbage Vehicle Approaching (${radius} m)`,
+            msg,
             { residentName: house.residentName, distance: Math.round(dist), radius, direction: vehicle.direction });
           this.broadcast('geofence_alert', notif);
-        } else if (house.isInGeofence && dist > radius + this.settings.rearmBufferM) {
-          house.isInGeofence = false;
+        } else if (house.isInGeofence) {
+          if (house.minDistanceInZone == null || dist < house.minDistanceInZone) {
+            house.minDistanceInZone = dist;
+          }
+          // If the truck got close to the gate and is now moving away, mark Vehicle Passed
+          if (house.minDistanceInZone <= Math.min(120, radius * 0.35) &&
+              dist > house.minDistanceInZone + 80 &&
+              prevDist != null && dist > prevDist + 5) {
+            house.hasPassed = true;
+          }
+          // Left the 500m geofence zone (with hysteresis buffer) -> reset alert state
+          if (dist > radius + this.settings.rearmBufferM) {
+            house.isInGeofence = false;
+            if (prevDist != null && dist > house.minDistanceInZone + 50) {
+              house.hasPassed = true;
+            }
+            house.minDistanceInZone = null;
+          }
+        } else if (house.hasPassed && prevDist != null && dist < prevDist - 15 && dist <= approachMax) {
+          // Vehicle is approaching again on a future loop
+          house.hasPassed = false;
         }
       }
 
@@ -306,7 +335,12 @@
 
     /* ── Clear geofence latches so a fresh demo run re-triggers alerts ──── */
     resetGeofences() {
-      for (const house of this.houses) house.isInGeofence = false;
+      for (const house of this.houses) {
+        house.isInGeofence = false;
+        house.hasPassed = false;
+        house.prevDistanceToVehicle = null;
+        house.minDistanceInZone = null;
+      }
     }
 
     /* ── Update vehicle GPS location (simulator or live GPS) ─────────────── */

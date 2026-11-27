@@ -104,6 +104,28 @@
     return m >= 1000 ? `${(m / 1000).toFixed(m % 1000 === 0 ? 0 : 1)} km` : `${Math.round(m)} m`;
   }
 
+  // Four clear states for the resident geofence display:
+  // Outside Zone -> Approaching -> Alert Triggered -> Vehicle Passed
+  function computeZoneStatus(house, settings) {
+    if (!house || house.distanceToVehicle == null) {
+      return { code: 'outside', label: 'Outside Zone' };
+    }
+    const radius = effectiveAlertRadius(house, settings);
+    const dist = house.distanceToVehicle;
+    const approachMax = Math.max(radius * 1.6, radius + 300);
+
+    if (house.hasPassed) {
+      return { code: 'passed', label: 'Vehicle Passed' };
+    }
+    if (house.isInGeofence || dist <= radius) {
+      return { code: 'triggered', label: 'Alert Triggered' };
+    }
+    if (dist <= approachMax) {
+      return { code: 'approaching', label: 'Approaching' };
+    }
+    return { code: 'outside', label: 'Outside Zone' };
+  }
+
   window.GeoUtils = {
     calculateHaversineDistance,
     calculateBearing,
@@ -113,6 +135,7 @@
     effectiveAlertRadius,
     formatMeters,
     formatCoords,
+    computeZoneStatus,
     MUNICIPAL_LOCALITIES,
   };
 })();
